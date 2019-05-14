@@ -1,11 +1,15 @@
 'use strict';
 
 import * as util from "./util.js";
+import * as harmony from "./harmony.js";
 
-var melody, progression, scroller, svg;
-var bpm = 150;
+var melody, original_progression, progression, scroller, svg;
+var bpm = 100;
 var playing = false;
 var midi_ready;
+var key;
+var scroller;
+var x, xinv, y;
 
 const CHORDS = {
   "maj": [0, 4, 7],
@@ -19,25 +23,111 @@ const CHORDS = {
   "+":   [0, 4, 8]
 }
 
-const lead = 'soprano_sax';
+const count_time = function() {
+  let start = 0;
+  return function(el) {
+    el.start = start;
+    start = start + el.duration;
+    return el;
+  }
+}
+
+const D = {bass: 35, ride: 51, hat_pedal: 44}
+const beat = [
+  {notes: [D.ride],                  duration:1},
+  {notes: [D.ride, D.bass, D.hat_pedal], duration:2/3},
+  {notes: [D.ride], duration:1/3},
+  {notes: [D.ride],                  duration:1},
+  {notes: [D.ride, D.bass, D.hat_pedal], duration:2/3},
+  {notes: [D.ride], duration:1/3},
+].map(count_time())
+
 MIDI.loadPlugin({
   soundfontUrl: "./soundfont/selection/",
   instruments: [
     "acoustic_grand_piano",
     "acoustic_bass",
-    "percussion"
+    "steel_drums"
   ],
   onsuccess: function() { 
     MIDI.programChange(1, MIDI.GM.byName['acoustic_bass'].number);  
-    // MIDI.programChange(2, MIDI.GM.byName[lead].number);  
-    midi_ready();
+    MIDI.programChange(2, MIDI.GM.byName['steel_drums'].number);  
+    // midi_ready();
   }
 });
 
+const draw_notes = function() {
+  const select = d3.select('#notes');
+  const notes = !select.empty() ? select : scroller.append('g').attr('id', 'notes');
+  notes.selectAll()
+    .data(melody)
+    .enter()
+    .append('rect')
+    .attr('x', d => x(d.start))
+    .attr('y', d => y(d.note))
+    .attr('width', d => x(d.duration))
+    .attr('height', 10)
+    .style('stroke', 'white')
+    .style('stroke-width', 3);
+}
+
+const draw_chords = function() {
+  d3.select('#chords').remove();
+  const chords = scroller.append('g').attr('id', 'chords');
+  chords.selectAll()
+    .data(progression)
+    .enter()
+    .append('text')
+    .text(d => d.name)
+    .attr('x', d => x(d.start) + 5)
+    .attr('y', 100)
+    .style('font-family', 'Patrick Hand, cursive')
+    .style('font-size', '18pt');
+  chords.selectAll()
+    .data(progression)
+    .enter()
+    .append('text')
+    .text(d => d.roman)
+    .attr('x', d => x(d.start) + 5)
+    .attr('y', 130)
+    .style('font-family', 'serif')
+    .style('font-size', '12pt');
+}
+
+const draw_barlines = function(duration) {
+  const select = d3.select('#barlines');
+  const barlines = !select.empty() ? select : scroller.append('g').attr('id', 'barlines');
+  barlines.selectAll()
+    .data(util.range(Math.ceil(duration / 4)))
+    .enter()
+    .append('line')
+    .attr('x1', d => x(4*d))
+    .attr('x2', d => x(4*d))
+    .attr('y1', y(0))
+    .attr('y2', y(96))
+    .style('stroke', 'lightgray')
+    .style('stroke-width', '1px');
+}
+
+const draw_button = function(name, px, py, symbol) {
+  const select = d3.select(`#${name}`);
+  const button = !select.empty() ? select : svg.append('g').attr('id', name)
+  button.attr('transform', `translate(${px}, ${py})`);
+  symbol(button);
+  const surface = button.append('rect')
+    .attr('x', 0).attr('y', 0)
+    .attr('width', 50).attr('height', 50)
+    .style('fill', 'rgba(255,255,255,0.01')
+    .style('stroke', 'black');
+  return surface;
+}
+
 const init = function() {
-  let x    = (t => t * 60);
-  let xinv = (t => t / 60);
-  let y    = (p => (84 - p) * 10);
+  x    = (t => t * 60);
+  xinv = (t => t / 60);
+  y    = (p => (84 - p) * 10);
+
+  progression = original_progression;
 
   const events = melody.concat(progression)
   let duration = d3.max(events.map(x => x.start+x.duration));
@@ -51,38 +141,11 @@ const init = function() {
     .attr('transform', 'translate(100,0)');
   scroller  = container.append('g').attr('id', 'scroller')
     .attr('transform', 'translate(0,0)');
-  const notes     = scroller.append('g').attr('id', 'notes');
-  const chords    = scroller.append('g').attr('id', 'chords');
-  const barlines  = scroller.append('g').attr('id', 'barlines');
-  notes.selectAll()
-    .data(melody)
-    .enter()
-    .append('rect')
-    .attr('x', d => x(d.start))
-    .attr('y', d => y(d.note))
-    .attr('width', d => x(d.duration))
-    .attr('height', 10)
-    .style('stroke', 'white')
-    .style('stroke-width', 3);
-  chords.selectAll()
-    .data(progression)
-    .enter()
-    .append('text')
-    .text(d => d.name)
-    .attr('x', d => x(d.start) + 5)
-    .attr('y', 100)
-    .style('font-family', 'Patrick Hand, cursive')
-    .style('font-size', '18pt');
-  barlines.selectAll()
-    .data(util.range(Math.ceil(duration / 4)))
-    .enter()
-    .append('line')
-    .attr('x1', d => x(4*d))
-    .attr('x2', d => x(4*d))
-    .attr('y1', y(0))
-    .attr('y2', y(96))
-    .style('stroke', 'lightgray')
-    .style('stroke-width', '1px');
+
+  draw_notes();
+  draw_chords();
+  draw_barlines(duration);
+
   container.append('line')
     .attr('x1', 0)
     .attr('x2', 0)
@@ -92,73 +155,38 @@ const init = function() {
     .style('stroke-width', '3px');
 
   const scl = 15
-  const playbutton = svg.append('g')
-    .attr('transform', 'translate(10, 500)');
-  playbutton.append('rect')
-    .attr('x', 0).attr('y', 0)
-    .attr('width', 50).attr('height', 50)
-    .style('fill', 'white')
-  const play_symbol = playbutton.append('path')
-    .attr('d', `M -${0.5*scl} -${Math.sqrt(3)/2*scl}` +
-               `L -${0.5*scl} ${ Math.sqrt(3)/2*scl}` +
-               `L ${scl} 0` +
-               `L -${0.5*scl} -${Math.sqrt(3)/2*scl}`)
-    .attr('transform', 'translate(25, 25)')
-    .style('fill', 'gray');
-  const play_surface = playbutton.append('rect')
-    .attr('x', 0).attr('y', 0)
-    .attr('width', 50).attr('height', 50)
-    .style('fill', 'rgba(255,255,255,0.01')
-    .style('stroke', 'black')
 
-  midi_ready = function() {
-    play_symbol.style('fill', 'black');
-    play_surface.on('click', function() { play() });
-  }
+  draw_button('play', 10, 500, x => {
+    x.append('path')
+      .attr('d', `M -${0.5*scl} -${Math.sqrt(3)/2*scl}` +
+                 `L -${0.5*scl} ${ Math.sqrt(3)/2*scl}` +
+                 `L ${scl} 0` +
+                 `L -${0.5*scl} -${Math.sqrt(3)/2*scl}`)
+      .attr('transform', 'translate(25, 25)')
+      .style('fill', 'black');
+  }).on('click', function() { play() });
 
-  const pausebutton = svg.append('g');
-  pausebutton.append('rect')
-    .attr('x', 0).attr('y', 0)
-    .attr('width', 50).attr('height', 50)
-    .style('fill', 'white')
-  pausebutton.append('rect')
-    .attr('x', -scl)
-    .attr('y', -scl)
-    .attr('height', 2*scl)
-    .attr('width', 4*scl/5)
-    .attr('transform', 'translate(25, 25)')
-  pausebutton.append('rect')
-    .attr('x', scl/5)
-    .attr('y', -scl)
-    .attr('height', 2*scl)
-    .attr('width', 4*scl/5)
-    .attr('transform', 'translate(25, 25)')
-  pausebutton.attr('transform', 'translate(70, 500)');
-  pausebutton.append('rect')
-    .attr('x', 0).attr('y', 0)
-    .attr('width', 50).attr('height', 50)
-    .style('fill', 'rgba(255,255,255,0.01')
-    .style('stroke', 'black')
-    .on('click', function() { pause() });
+  draw_button('pause', 70, 500, x => {
+    x.append('rect')
+      .attr('x', -scl)
+      .attr('y', -scl)
+      .attr('height', 2*scl)
+      .attr('width', 4*scl/5)
+      .attr('transform', 'translate(25, 25)');
+    x.append('rect')
+      .attr('x', scl/5)
+      .attr('y', -scl)
+      .attr('height', 2*scl)
+      .attr('width', 4*scl/5)
+      .attr('transform', 'translate(25, 25)');
+  }).on('click', function() { pause() });
 
-  const stopbutton = svg.append('g')
-    .attr('transform', 'translate(130, 500)');
-  stopbutton.append('rect')
-    .attr('x', 0).attr('y', 0)
-    .attr('width', 50).attr('height', 50)
-    .style('fill', 'white')
-  stopbutton.append('rect')
-    .attr('x', -scl)
-    .attr('y', -scl)
-    .attr('height', 2*scl)
-    .attr('width', 2*scl)
-    .attr('transform', 'translate(25, 25)')
-  stopbutton.append('rect')
-    .attr('x', 0).attr('y', 0)
-    .attr('width', 50).attr('height', 50)
-    .style('fill', 'rgba(255,255,255,0.01')
-    .style('stroke', 'black')
-    .on('click', function() { stop() });
+  draw_button('stop', 130, 500, x => {
+    x.append('rect')
+      .attr('x', -scl).attr('y', -scl)
+      .attr('width', 2*scl).attr('height', 2*scl)
+      .attr('transform', 'translate(25, 25)');
+  }).on('clidk', function() { stop() });
 
   const gettime = function() {
     return -xinv(scroller.node().transform.baseVal.consolidate().matrix.e);
@@ -180,11 +208,15 @@ const init = function() {
     while(melody[note_idx].start < time) note_idx++;
     let chord_idx = 0;
     while(progression[chord_idx].start < time) chord_idx++;
+    let beat_idx = 0;
+    while(progression[beat_idx].start < (time % 4)) {
+      beat_idx++;
+    }
     const playnextnote = function() {
       if(!playing) return;
       const note = melody[note_idx];
-      MIDI.noteOn( 0, note.note, 90, 0);
-      MIDI.noteOff(0, note.note, b2ms(note.duration) / 1000);
+      MIDI.noteOn( 0, note.note+12, 90, 0);
+      MIDI.noteOff(0, note.note+12, b2ms(note.duration) / 1000);
       note_idx++;
       setTimeout(playnextnote, b2ms(melody[note_idx].start - gettime()))
     };
@@ -192,7 +224,6 @@ const init = function() {
       if(!playing) return;
       const chord = progression[chord_idx];
       const notes = CHORDS[chord.mode].map(x => x+chord.base+48);
-      console.log('playing ' + notes);
       MIDI.noteOn(  1, notes[0]-12, 90, 0);
       MIDI.noteOff( 1, notes[0]-12, b2ms(chord.duration) / 1000);
       MIDI.chordOn( 0, notes.slice(2), 60, 0);
@@ -200,8 +231,18 @@ const init = function() {
       chord_idx++;
       setTimeout(playnextchord, b2ms(progression[chord_idx].start - gettime()))
     };
-    setTimeout(playnextnote,  b2ms(melody[note_idx].start - time))
-    setTimeout(playnextchord, b2ms(progression[chord_idx].start - time))
+    const playnextdrums = function() {
+      if(!playing) return;
+      const chord = beat[beat_idx];
+      MIDI.chordOn( 2, chord.notes, 90, 0);
+      MIDI.chordOff(2, chord.notes, b2ms(chord.duration) / 1000);
+      beat_idx = (beat_idx + 1) % beat.length;
+      const delay = b2ms((((beat[beat_idx].start - gettime()) % 4) + 4) % 4);
+      setTimeout(playnextdrums, delay);
+    };
+    setTimeout(playnextnote,  b2ms(melody[note_idx].start - time));
+    setTimeout(playnextchord, b2ms(progression[chord_idx].start - time));
+    setTimeout(playnextdrums, b2ms(beat[beat_idx].start - time));
   };
 
   const stop = function() {
@@ -216,12 +257,36 @@ const init = function() {
     scroller.interrupt();
     playing = false;
   };
+
+  d3.select('body')
+    .on('keydown', function() {
+      const keycode = d3.event.keyCode;
+      if(keycode === 32) {
+        if(playing) pause();
+        else        play();
+      }
+      else if(keycode === 39) {
+        pause()
+        const time = gettime() + 1;
+        scroller.attr('transform', `translate(-${x(time)})`);
+      }
+      else if(keycode === 37) {
+        pause()
+        const time = gettime() - 1;
+        scroller.attr('transform', `translate(-${x(time)})`);
+      }
+      else {
+        progression = harmony.reharmonize(original_progression);
+        console.log(progression);
+        draw_chords();
+      }
+    })
 };
 
 fetch('leadsheets/autumn_leaves.ls')
   .then(resp => resp.text())
   .then((data) => {
-    let chrdr = /([ABCDEFG_][#b]?)((?:|7|maj7|m7?|o7?|ø)?)/;
+    let chrdr = /([ABCDEFG_][#b]?)((?:|7|maj7|m7?|o7?|ø|\+)?)/;
     let lengthr = /:(e|s|\d*\.?\d+)([t.]?)/;
     let noter = /([abcdefg_][#b]?)(\d*):?((?:e|\d*\.?\d+)?)([t.]?)/;
 
@@ -254,6 +319,8 @@ fetch('leadsheets/autumn_leaves.ls')
         default_note = parseFloat(h.split(':')[1]);
       if (h.startsWith('default_chord'))
         default_chord = parseFloat(h.split(':')[1]);
+      if (h.startsWith('bpm'))
+        bpm = parseFloat(h.split(':')[1]);
     }
 
     let parse_chord = function(chord) {
@@ -277,13 +344,13 @@ fetch('leadsheets/autumn_leaves.ls')
       return {base:base, mode:mode, duration:duration, name:chordname};
     };
 
-    const key = parse_chord(header.split(' ')[1]);
+    key = parse_chord(header.split(' ')[1]);
     const scale = scales[key.mode].map(s => (12 + s + key.base) % 12);
     console.log(scale);
 
     // Process chords
     let start = 0;
-    progression = chords.map(function(c) {
+    original_progression = chords.map(function(c) {
       let chord = parse_chord(c);
       let relative = (roman[scale.indexOf(chord.base)] || roman[scale.indexOf((1+chord.base) % 12)] + "b") + chord.mode;
       const val = {base:chord.base, mode:chord.mode, start:start, duration:chord.duration,

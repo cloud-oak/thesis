@@ -1,4 +1,4 @@
-4/4 Em
+4/4 Em bpm:160
 
 _        | Am7         | D7      | Gmaj7   |
 _ e f# g | c2:5           d e f# | b:2 b:3 |
