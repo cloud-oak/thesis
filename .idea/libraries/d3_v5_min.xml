@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="d3.v5.min" type="javaScript">
+    <CLASSES>
+      <root url="file://$PROJECT_DIR$/js/vendor/d3.v5.min.js" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
