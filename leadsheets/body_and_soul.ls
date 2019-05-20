@@ -1,4 +1,4 @@
-4/4 Db default_note:0.5 default_chord:2
+4/4 Db default_note:0.5 default_chord:2 bpm:150
 
 Ebm7      Bb7     | Ebm7  D7  | Dbmaj7     Gb7      | Fm7         Eo7
 _ eb f eb f:1. eb | bb:1 bb:3 | _ ab bb ab bb:1. ab | eb2:1 db2:1 c2:1 bb:1

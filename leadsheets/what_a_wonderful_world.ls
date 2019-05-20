@@ -3,8 +3,8 @@
 _:4     | F      Am   | Bb      Am      | Gm7     F      | A7      Dm              |
 _:3 c e | f:1. a c2:2 | _ d2 d2 d2 c2:2 | _ bb bb bb a:2 | _ g g g f:1 _:t f:t f:t |
 
-Db:4                | Gm7     C7             | F  F+ | Bbmaj7 C7      |
-f:1 _:t f:t f:t f:2 | _:1 f f e:1t f:1t g:1t | a:6            _:1 c e |
+Db:4                | Gm7     C7             | F     F+ | Bb     C     |
+f:1 _:t f:t f:t f:2 | _:1 f f e:1t f:1t g:1t | a:6             _:1 c e |
 
 F      Am       | Bb       Am       | Gm7                F      | A7              Dm              |
 f:1. a c2:1. c2 | d2:1. d2 c2:1. c2 | bb:1 _:t bb:t bb:t a:1. a | g:1 _:t g:t g:t f:1 _:t f:t f:t |
