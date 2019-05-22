@@ -53,13 +53,21 @@ const chordname = function(chord) {
 }
 
 const relative = function(chord, key) {
-  chord.base = (12 + chord.base - key.base) % 12;
-  return chord;
+  let newchord = {};
+  for(key in chord) {
+    newchord[k] = chord[k]; // shallow copy
+  }
+  newchord.base = (12 + chord.base - key.base) % 12;
+  return newchord;
 }
 
 const absolute = function(chord, key) {
-  chord.base = (12 + chord.base + key.base) % 12;
-  return chord;
+  let newchord = {};
+  for(k in chord) {
+    newchord[k] = chord[k]; // shallow copy
+  }
+  newchord.base = (12 + chord.base + key.base) % 12;
+  return newchord;
 }
 
 const scaletone = function(chord, key) {
@@ -137,38 +145,44 @@ const find_patterns = function(chords) {
   return patterns;
 };
 
-const dictify = function(raw_rules) {
-  let rules = {};
-  for(const [l,r] of raw_rules) {
-    rules[l] = (rules[l] || []).concat([r]);
-    rules[r] = (rules[r] || []).concat([l]);
+const alternatives = {};
+const add_alternative = function(chord, alt) {
+  chord[0] = (12+chord[0]) % 12;
+  alt[0]   = (12+alt[0]) % 12;
+  const value = alternatives[chord] || [];
+  if(!value.includes(alt)) {
+    value.push(alt);
+    alternatives[chord] = value;
   }
-  return rules;
 }
-
-const tritonals = dictify(util.range(12).map(x =>
-  [[x+1, '7'], [(x+7)%12, '7']]
-));
-console.log(tritonals);
-
-const reharmonization_rules = dictify([
-  ['IIIm7', 'Imaj7'],
-  ['VIm7', 'Imaj7'],
-  ['IVmaj7', 'IIm7'],
-  ['IIm7', 'IVmaj7'],
-  ['VIm7', 'IVmaj7'],
-  ['I', 'IIIm7']
-].map(x => x.map(read_roman)));
+util.range(12).map(x => {
+  add_alternative([x,'7'],    [x+Tritone,'7']); // Tritonal substitution
+  add_alternative([x,'maj7'], [x+Maj3,'m7']); // 6.2.1 a)
+  add_alternative([x,'maj7'], [x-Min3,'m7']); // 6.2.1 a)
+  add_alternative([x,''],     [x+Maj3,'m7']); // 6.2.1 a) for non-maj7 
+  add_alternative([x,''],     [x-Maj3,'m7']); // 6.2.1 a) for non-maj7
+  add_alternative([x,'m7'],   [x-Maj3,'maj7']); // 6.2.1 a) reverse
+  add_alternative([x,'m7'],   [x-Maj3,'maj7']); // 6.2.1 a) reverse
+  add_alternative([x,'o7'],   [x+Min3, 'o7']);
+  add_alternative([x,'o7'],   [x+2*Min3, 'o7']);
+  add_alternative([x,'o7'],   [x+3*Min3, 'o7']);
+  add_alternative([x,'o'],    [x, 'o7']);
+  add_alternative([x,'o'],    [x+Min3, 'o7']);
+  add_alternative([x,'o'],    [x+2*Min3, 'o7']);
+  add_alternative([x,'o'],    [x+3*Min3, 'o7']);
+});
 
 const reharmonize = function(progression, key) {
-  return progression.map(function(chord) {
-    let rel = relative(chord, key);
-    const alternatives = tritonals[[rel.base, rel.mode]];
-    if(alternatives && Math.random() > 0) {
-      const selected = alternatives[Math.floor(Math.random()*alternatives.length)];
-      [rel.base, rel.mode] = selected;
+  return progression.map(function(oldchord) {
+    // let rel = relative(chord, key);
+    let chord = Object.create(oldchord);
+    const newchords = alternatives[[chord.base, chord.mode]];
+    if(newchords && Math.random() > 0.7) {
+      const selected = newchords[Math.floor(Math.random()*newchords.length)];
+      [chord.base, chord.mode] = selected;
+      console.log(selected);
     }
-    return absolute(rel, key);
+    return chord;
   });
 };
 

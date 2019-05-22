@@ -184,7 +184,21 @@ const draw_buttons = function(play, pause, stop) {
       .attr('width', 2*scl).attr('height', 2*scl)
       .attr('transform', 'translate(25, 25)');
   }).on('click', function() { stop() });
-  prepare_button(options, 'reharmonize', 0, 0, 170, 50, x => {
+  let dy = 0;
+  prepare_button(options, 'original', 0, dy, 170, 50, x => {
+    x.append('text')
+      .text('original')
+      .attr('x', 170/2)
+      .attr('y', 33)
+      .attr('text-anchor', 'middle')
+      .style('font-family', 'Patrick Hand')
+      .style('font-size', '18pt');
+  }).on('click', function() {
+    progression = original_progression;
+    draw_chords();
+  });
+  dy += 60
+  prepare_button(options, 'reharmonize', 0, dy, 170, 50, x => {
     x.append('text')
       .text('reharmonize')
       .attr('x', 170/2)
@@ -196,10 +210,9 @@ const draw_buttons = function(play, pause, stop) {
     progression = harmony.reharmonize(original_progression, key);
     draw_chords();
   });
-  let offset = 0;
   for(const el of ['melody', 'harmony', 'bass', 'drums']) {
-    offset += 60;
-    const btn = prepare_button(options, el, 0, offset, 170, 50, x => {
+    dy += 60;
+    const btn = prepare_button(options, el, 0, dy, 170, 50, x => {
       x.append('text')
         .text(el)
         .attr('x', 170/2)
