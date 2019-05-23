@@ -1,4 +1,4 @@
-4/4 F default_note:0.5 default_chord:2
+4/4 F default_note:0.5 default_chord:2 bpm:100
 
 _:4     | F      Am   | Bb      Am      | Gm7     F      | A7      Dm              |
 _:3 c e | f:1. a c2:2 | _ d2 d2 d2 c2:2 | _ bb bb bb a:2 | _ g g g f:1 _:t f:t f:t |
