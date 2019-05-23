@@ -176,10 +176,13 @@ const reharmonize = function(progression, key) {
   return progression.map(function(oldchord) {
     // let rel = relative(chord, key);
     let chord = Object.create(oldchord);
+    chord.reharmonized = false;
     const newchords = alternatives[[chord.base, chord.mode]];
-    if(newchords && Math.random() > 0.7) {
+    if(newchords && Math.random() > 0.5) {
       const selected = newchords[Math.floor(Math.random()*newchords.length)];
+      chord.original = oldchord;
       [chord.base, chord.mode] = selected;
+      chord.reharmonized = true;
     }
     return chord;
   });

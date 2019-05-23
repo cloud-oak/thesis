@@ -54,31 +54,48 @@ const draw_chords = function() {
   d3.select('#chords').remove();
   const chords = scroller.append('g').attr('id', 'chords');
   const maxnote = d3.max(melody.map(n => n.note));
-  chords.selectAll()
+
+  chords
+    .append('g').attr('id', 'chordnames').selectAll()
     .data(progression)
     .enter()
     .append('text')
-    .text(d => harmony.chordname(d))
-    .attr('x', d => x(d.start) + 5)
-    .attr('y', y(maxnote+6))
-    .style('font-family', 'Patrick Hand, cursive')
-    .style('font-size', '18pt');
-  chords.selectAll()
+      .text(d => harmony.chordname(d))
+      .attr('x', d => x(d.start) + 5)
+      .attr('y', y(maxnote+8))
+      .style('font-family', 'Patrick Hand, cursive')
+      .style('font-size', '18pt')
+      .style('fill', d => d.reharmonized ? 'red' : 'black');
+  chords
+    .append('g').attr('id', 'romannames').selectAll()
     .data(progression)
     .enter()
     .append('text')
-    .text(d => harmony.roman(d, key))
-    .attr('x', d => x(d.start) + 5)
-    .attr('y', y(maxnote+3))
-    .style('font-family', 'serif')
-    .style('font-size', '12pt');
+      .text(d => harmony.roman(d, key))
+      .attr('x', d => x(d.start) + 5)
+      .attr('y', y(maxnote+2))
+      .style('font-family', 'serif')
+      .style('font-size', '12pt');
+  chords
+    .append('g').attr('id', 'originals').selectAll()
+    .data(progression.filter(x => x.reharmonized))
+    .enter()
+    .append('text')
+      .text(d => harmony.chordname(d.original))
+      .attr('x', d => x(d.start) + 5)
+      .attr('y', y(maxnote+5))
+      .style('font-family', 'Patrick Hand, cursive')
+      .style('font-size', '18pt')
+      .style('fill', 'gray')
+      .style('text-decoration', 'line-through')
   const offset = 20;
-  const patterns = chords.selectAll()
+  const patterns = chords
+    .append('g').attr('id', 'patterns').selectAll()
     .data(harmony.find_patterns(progression))
     .enter();
   patterns.append('path')
     .attr('d', p =>
-              `M ${x(p.start) + offset} ${y(maxnote + 9)} ` +
+              `M ${x(p.start) + offset} ${y(maxnote + 11)} ` +
               `v -10 h${x(p.duration)} v 10`)
     .style('fill', 'none')
     .style('stroke', 'black')
@@ -86,7 +103,7 @@ const draw_chords = function() {
   patterns.append('text')
     .text(p => p.type)
     .attr('x', p => x(p.start + p.duration/2) + offset)
-    .attr('y', p => y(maxnote + 11))
+    .attr('y', p => y(maxnote + 13))
     .attr('text-anchor', 'middle')
     .style('font-size', p => p.type.length > 1 ? '12pt' : '18pt');
 }
@@ -276,7 +293,6 @@ const init = function() {
       .attr('transform', `translate(${-x(duration)}, 0)`)
       .on('end', function() { playing = false });
 
-    console.log(time);
     let note_idx  = 0;
     while(melody[note_idx].start < time) note_idx++;
     let chord_idx = 0;
@@ -408,7 +424,7 @@ const load_song = function(song) {
         } else {
           duration = default_chord;
         }
-        return {base:base, mode:mode, duration:duration};
+        return {base:base, mode:mode, duration:duration, reharmonized:false};
       };
 
       key = parse_chord(header.split(' ')[1]);
