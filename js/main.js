@@ -365,12 +365,14 @@ const init = function() {
       }
       else if(keycode === 39) {
         pause()
-        const time = gettime() + 1;
+        let time = gettime() + 4;
+        time -= time % 4;
         scroller.attr('transform', `translate(${-x(time)})`);
       }
       else if(keycode === 37) {
         pause()
-        const time = gettime() - 1;
+        let time = gettime() - 4;
+        time -= time % 4;
         scroller.attr('transform', `translate(${-x(time)})`);
       }
     })
