@@ -180,7 +180,6 @@ const reharmonize = function(progression, key) {
     if(newchords && Math.random() > 0.7) {
       const selected = newchords[Math.floor(Math.random()*newchords.length)];
       [chord.base, chord.mode] = selected;
-      console.log(selected);
     }
     return chord;
   });
