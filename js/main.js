@@ -304,7 +304,7 @@ const init = function() {
         MIDI.noteOff( 1, notes[0]-12, b2ms(chord.duration) / 1000);
       }
       if(enabled.harmony) {
-        MIDI.chordOn( 0, notes.slice(2), 60, 0);
+        MIDI.chordOn( 0, notes.slice(1), 60, 0);
         MIDI.chordOff(0, notes.slice(1), b2ms(chord.duration) / 1000);
       }
       chord_idx++;
