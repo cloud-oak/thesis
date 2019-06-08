@@ -399,9 +399,10 @@ const init = function() {
 
   window.mvae = mvae;
   mvae.initialize().then(function(x) {
+    const latent_noise = mm.tf.randomNormal([1, 128], 0, 0.3);
     d3.select('#improvise')
       .on('click', function() {
-        for(let start = 4; start < duration; start += 8) {
+        for(let start = 4; start < duration - 8; start += 8) {
           const chords    = progression.filter(t => t.start >= start && t.start <= start+8);
           const submelody = original_melody.filter(t => t.start >= start && t.start <= start+8);
 
@@ -418,7 +419,7 @@ const init = function() {
           const notesequence = harmony.melody_to_notesequence(submelody, -start);
           mvae.encode([notesequence], chord_progression).then(function(latent) {
             // Perturb latent code
-            latent = mm.tf.add(latent, mm.tf.randomNormal([1, 128], 0, 0.3));
+            latent = mm.tf.add(latent, latent_noise);
             mvae.decode(latent, null, chord_progression).then(function(res) {
               const pre  = melody.filter(t => t.start < start);
               const post = melody.filter(t => t.start >= start+8);
