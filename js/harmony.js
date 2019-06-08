@@ -1,6 +1,7 @@
 'use strict';
 
 import * as util from './util.js';
+import * as nn from './nn.js';
 
 const Perfect1 = 0;
 const Half     = 1;
@@ -32,6 +33,19 @@ const scales = {'': [0, 2, 4, 5, 7, 9, 11], 'm': [0, 2, 3, 5, 7, 8, 10]};
 const roman_steps = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
 const pitch2note = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭', 'A', 'B♭', 'B']
+const pitch2note_tonal = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
+
+const mode2mode_tonal = {
+  "": "",
+  "maj7": "Maj7",
+  "7": "7",
+  "+": "M#5",
+  "m": "m",
+  "m7": "m7",
+  "o": "o",
+  "o7": "o7",
+  "ø": "m7b5"
+}
 
 const note2pitch = {
   c: 0, 'c#': 1, 'db': 1, d: 2, 'd#': 3, 'eb': 3, e: 4,
@@ -50,6 +64,10 @@ const counttime = function() {
 
 const chordname = function(chord) {
   return pitch2note[chord.base] + chord.mode;
+}
+
+const chordname_tonal = function(chord) {
+  return pitch2note_tonal[chord.base] + mode2mode_tonal[chord.mode];
 }
 
 const relative = function(chord, key) {
@@ -159,7 +177,7 @@ util.range(12).map(x => {
   add_alternative([x,'7'],    [x+Tritone,'7']); // Tritonal substitution
   add_alternative([x,'maj7'], [x+Maj3,'m7']); // 6.2.1 a)
   add_alternative([x,'maj7'], [x-Min3,'m7']); // 6.2.1 a)
-  add_alternative([x,''],     [x+Maj3,'m7']); // 6.2.1 a) for non-maj7 
+  add_alternative([x,''],     [x+Maj3,'m7']); // 6.2.1 a) for non-maj7
   add_alternative([x,''],     [x-Maj3,'m7']); // 6.2.1 a) for non-maj7
   add_alternative([x,'m7'],   [x-Maj3,'maj7']); // 6.2.1 a) reverse
   add_alternative([x,'m7'],   [x-Maj3,'maj7']); // 6.2.1 a) reverse
@@ -172,7 +190,43 @@ util.range(12).map(x => {
   add_alternative([x,'o'],    [x+3*Min3, 'o7']);
 });
 
+const melody_to_notesequence = function(melody, shift) {
+  const notes = melody.map(function(n) {
+    return {
+      pitch: n.note,
+      quantizedStartStep: Math.round(4*(n.start+shift)),
+      quantizedEndStep: Math.round(4*(n.start+shift+n.duration))
+    }
+  });
+  const totalQuantizedSteps = d3.max(notes => n.quantizedEndStep);
+  return {
+    notes: notes,
+    quantizationInfo: {stepsPerQuarter: 4},
+    tempos: [{time: 0, qpm: 120}],
+    totalQuantizedSteps: totalQuantizedSteps
+  }
+}
+
+const notesequence_to_melody = function(notesequence, shift) {
+  return notesequence.notes.map(function(n) {
+    return {
+      note: n.pitch,
+      start: n.quantizedStartStep / 4 + shift,
+      duration: (n.quantizedEndStep - n.quantizedStartStep) / 4,
+      changed: true
+    }
+  })
+
+}
+
 const reharmonize = function(progression, key) {
+  // TODO: delete
+  let tmp = [];
+  for(let i = 0; i < 12; ++i) {
+    tmp.push(nn.eval_notenet({base: 0, mode: ''}, i));
+  }
+  console.log(tmp);
+
   return progression.map(function(oldchord) {
     // let rel = relative(chord, key);
     let chord = Object.create(oldchord);
@@ -188,4 +242,4 @@ const reharmonize = function(progression, key) {
   });
 };
 
-export { CHORDS, counttime, chordname, note2pitch, scales, roman, reharmonize, find_patterns };
+export { CHORDS, counttime, chordname, note2pitch, scales, roman, reharmonize, find_patterns, notesequence_to_melody, melody_to_notesequence, chordname_tonal };

@@ -3,9 +3,10 @@
 import * as util from "./util.js";
 import * as harmony from "./harmony.js";
 
-var melody, original_progression, progression, scroller, svg, button_pane;
+var original_melody, melody, original_progression, progression, scroller, svg, button_pane;
 var bpm = 100;
-var playing = false, enabled={melody:true, harmony:true, bass:true, drums:true}
+var playing = false;
+var enabled = {melody:true, harmony:true, bass:true, drums:true};
 var midi_ready;
 var key;
 var scroller;
@@ -21,6 +22,7 @@ const beat = [
   {notes: [D.ride], duration:1/3},
 ].map(harmony.counttime())
 
+
 MIDI.loadPlugin({
   soundfontUrl: "./soundfont/selection/",
   instruments: [
@@ -28,14 +30,17 @@ MIDI.loadPlugin({
     "acoustic_bass",
     "steel_drums"
   ],
-  onsuccess: function() { 
-    MIDI.programChange(1, MIDI.GM.byName['acoustic_bass'].number);  
-    MIDI.programChange(2, MIDI.GM.byName['steel_drums'].number);  
+  onsuccess: function() {
+    MIDI.programChange(1, MIDI.GM.byName['acoustic_bass'].number);
+    MIDI.programChange(2, MIDI.GM.byName['steel_drums'].number);
     // midi_ready();
   }
 });
 
+const mvae = new mm.MusicVAE("https://storage.googleapis.com/magentadata/js/checkpoints/music_vae/mel_chords");
+
 const draw_notes = function() {
+  d3.select('#notes').remove();
   const select = d3.select('#notes');
   const notes = !select.empty() ? select : scroller.append('g').attr('id', 'notes');
   notes.selectAll()
@@ -47,7 +52,8 @@ const draw_notes = function() {
     .attr('width', d => x(d.duration))
     .attr('height', 10)
     .style('stroke', 'white')
-    .style('stroke-width', 3);
+    .style('stroke-width', 3)
+    .style('fill', d => d.changed ? 'teal': 'black');
 }
 
 const draw_chords = function() {
@@ -65,7 +71,7 @@ const draw_chords = function() {
       .attr('y', y(maxnote+8))
       .style('font-family', 'Patrick Hand, cursive')
       .style('font-size', '18pt')
-      .style('fill', d => d.reharmonized ? 'red' : 'black');
+      .style('fill', d => d.reharmonized ? 'teal' : 'black');
   chords
     .append('g').attr('id', 'romannames').selectAll()
     .data(progression)
@@ -212,9 +218,11 @@ const draw_buttons = function(play, pause, stop) {
       .style('font-size', '18pt');
   }).on('click', function() {
     progression = original_progression;
+    melody = original_melody;
+    draw_notes();
     draw_chords();
   });
-  dy += 60
+  dy += 60;
   prepare_button(options, 'reharmonize', 0, dy, 170, 50, x => {
     x.append('text')
       .text('reharmonize')
@@ -227,6 +235,17 @@ const draw_buttons = function(play, pause, stop) {
     progression = harmony.reharmonize(original_progression, key);
     draw_chords();
   });
+  dy += 60;
+  prepare_button(options, 'improvise', 0, dy, 170, 50, x => {
+    x.append('text')
+      .text('improvise')
+      .attr('x', 170/2)
+      .attr('y', 33)
+      .attr('text-anchor', 'middle')
+      .style('font-family', 'Patrick Hand')
+      .style('font-size', '18pt')
+      .style('fill', 'gray');
+  })
   for(const el of ['melody', 'harmony', 'bass', 'drums']) {
     dy += 60;
     const btn = prepare_button(options, el, 0, dy, 170, 50, x => {
@@ -255,6 +274,7 @@ const init = function() {
   y    = (p => (96 - p) * 10);
 
   progression = original_progression;
+  melody = original_melody;
 
   const events = melody.concat(progression)
   let duration = d3.max(events.map(x => x.start+x.duration));
@@ -273,7 +293,7 @@ const init = function() {
     .attr('x2', 0)
     .attr('y1', y(0))
     .attr('y2', y(96))
-    .style('stroke', 'red')
+    .style('stroke', 'teal')
     .style('stroke-width', '3px');
 
   scroller  = container.append('g').attr('id', 'scroller')
@@ -327,7 +347,7 @@ const init = function() {
       setTimeout(playnextchord, b2ms(progression[chord_idx].start - gettime()))
     };
     const playnextdrums = function() {
-      if(!playing) return;
+     if(!playing) return;
       const chord = beat[beat_idx];
       if(enabled.drums) {
         MIDI.chordOn( 2, chord.notes, 90, 0);
@@ -375,7 +395,46 @@ const init = function() {
         time -= time % 4;
         scroller.attr('transform', `translate(${-x(time)})`);
       }
-    })
+    });
+
+  window.mvae = mvae;
+  mvae.initialize().then(function(x) {
+    d3.select('#improvise')
+      .on('click', function() {
+        for(let start = 4; start < duration; start += 8) {
+          const chords    = progression.filter(t => t.start >= start && t.start <= start+8);
+          const submelody = original_melody.filter(t => t.start >= start && t.start <= start+8);
+
+          let chord_progression = new Array(8).fill(mm.constants.NO_CHORD);
+          for(let beat = 0; beat < 8; ++beat) {
+            for(let c of chords) {
+              if(c.start <= beat+start && c.start+c.duration > beat+start) {
+                chord_progression[beat] = harmony.chordname_tonal(c);
+              }
+            }
+          }
+          console.log(chord_progression);
+
+          const notesequence = harmony.melody_to_notesequence(submelody, -start);
+          mvae.encode([notesequence], chord_progression).then(function(latent) {
+            // Perturb latent code
+            latent = mm.tf.add(latent, mm.tf.randomNormal([1, 128], 0, 0.3));
+            mvae.decode(latent, null, chord_progression).then(function(res) {
+              const pre  = melody.filter(t => t.start < start);
+              const post = melody.filter(t => t.start >= start+8);
+              console.log(res[0]);
+              const newnotes = harmony.notesequence_to_melody(res[0], start);
+              //aconsole.log(newnotes[0]);
+              melody = pre.concat(newnotes).concat(post);
+              window.melody = melody;
+              draw_notes();
+            });
+          });
+        }
+      });
+    d3.select('#improvise > text')
+      .style('fill', 'black');
+  });
 };
 
 const load_song = function(song) {
@@ -431,7 +490,6 @@ const load_song = function(song) {
 
       key = parse_chord(header.split(' ')[1]);
       const scale = harmony.scales[key.mode].map(s => (12 + s + key.base) % 12);
-      console.log(scale);
 
       // Process chords
       let start = 0;
@@ -442,7 +500,7 @@ const load_song = function(song) {
 
       start = 0;
       console.log(notes);
-      melody = notes.map(function(n) {
+      original_melody = notes.map(function(n) {
         let [, note, octave, duration, triplet] = n.match(noter);
         if(duration === '')       duration = default_note;
         else if(duration === 'e') duration = 0.5;
@@ -453,7 +511,7 @@ const load_song = function(song) {
         if(octave === '')         octave = 1;
         note = harmony.note2pitch[note];
         if(note !== null) note = +note + 36 + 12 * octave;
-        return {note:note, duration:duration};
+        return {note:note, duration:duration, changed:false};
       }).map(harmony.counttime())
         .filter(x => x.note !== null);
 
