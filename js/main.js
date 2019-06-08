@@ -329,7 +329,9 @@ const init = function() {
         MIDI.noteOff(0, note.note+12, b2ms(note.duration) / 1000);
       }
       note_idx++;
-      setTimeout(playnextnote, b2ms(melody[note_idx].start - gettime()))
+      if(note_idx < melody.length) {
+        setTimeout(playnextnote, b2ms(melody[note_idx].start - gettime()));
+      }
     };
     const playnextchord = function() {
       if(!playing) return;
@@ -344,7 +346,9 @@ const init = function() {
         MIDI.chordOff(0, notes.slice(1), b2ms(chord.duration) / 1000);
       }
       chord_idx++;
-      setTimeout(playnextchord, b2ms(progression[chord_idx].start - gettime()))
+      if(chord_idx < progression.length) {
+        setTimeout(playnextchord, b2ms(progression[chord_idx].start - gettime()));
+      }
     };
     const playnextdrums = function() {
      if(!playing) return;
