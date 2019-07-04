@@ -1,0 +1,10 @@
+{
+  "embeddings": [
+    {
+      "tensorName": "Chord2Vec",
+      "tensorShape": [252, 4],
+      "tensorPath": "data/chord2vec_tensors.tsv",
+      "metadataPath": "data/chord2vec_labels.tsv"
+    }
+  ]
+}
