@@ -56,6 +56,10 @@
       margin-left: auto !important;
       margin-right: auto !important;
     }
+    .descriptor {
+      display: inline-block;
+      min-width: 9cm;
+    }
     </style>
   </head>
 
@@ -69,7 +73,7 @@
           </header>
           <section class="post">
             <p>
-              Original
+              <span class="descriptor">Original</span>
               <img src="original.svg">
               <audio controls>
                 <source src="original.mp3" type="audio/mpeg">
@@ -77,6 +81,7 @@
               </audio> 
             </p>
             <p>
+              <span class="descriptor">Reharmonized &amp; Adapted</span>
               <img src="reharmonized_adapted.svg">
               <audio controls>
                 <source src="reharmonized_adapted.mp3" type="audio/mpeg">
@@ -84,6 +89,7 @@
               </audio> 
             </p>
             <p>
+              <span class="descriptor">Reharmonized &amp; Perturbation</span>
               <img src="varying_perturbs.svg">
               <audio controls>
                 <source src="varying_perturbs.mp3" type="audio/mpeg">
@@ -91,6 +97,7 @@
               </audio> 
             </p>
             <p>
+              <span class="descriptor">Reharmonized &amp; Consistent Perturbation</span>
               <img src="consistent_perturbs.svg">
               <audio controls>
                 <source src="consistent_perturbs.mp3" type="audio/mpeg">
