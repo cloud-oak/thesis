@@ -13,45 +13,30 @@
     <div id="player"></div>
     <script id="csdraw" type="text/x-cindyscript">
       javascript("updatetime()");
-      // proj1 = transpose([
-      //   [0, 0, scl, 1],
-      //   [scl*sin(λ+pi/2), scl*cos(λ+pi/2), 0, 1],
-      //   [0, 0, 0, 1],
-      //   [scl*sin(λ+pi), scl*cos(λ+pi), 0, 1]
-      // ]);
-      // proj2 = transpose([
-      //   [0, 1, 1],
-      //   [1, 0, 1],
-      //   [0, 0, 1],
-      //   [0,.3, 1]
-      // ]);
-      // // Id * proj1 = (v1,v2,v3,v4)^T
-      // // (v1,v2,v3,v4) * inv(proj1) = Id
-      // // P = inverse(proj1) * proj2
-      // // errc(matrixrowcolumn(proj1));
-      // // errc(matrixrowcolumn(proj2));
-      // P = proj2 * inverse(proj1);
-      P = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]];
-
-      repeat(length(data),
-        point = data_#;
-        loc = P*point;
-        loc = [loc_1 / loc_3, loc_2 / loc_3];
-        size = 5+[point_1,point_2]*[sin(λ),cos(λ)];
-        dist = |mouse() - loc|;
-        if(isreal(dist),
-          if(|mouse()-loc| < 0.03,
-            drawtext(loc, names_#, size->18, align->"mid", offset->[0, -9]),
-            draw(loc, size->size)
-          ),
-          draw(loc, size->size)
-        );
-      );
+      proj1 = transpose([
+        [0, 0, scl, 1],
+        [scl*sin(λ+pi/2), scl*cos(λ+pi/2), 0, 1],
+        [0, 0, 0, 1],
+        [scl*sin(λ+pi), scl*cos(λ+pi), 0, 1]
+      ]);
+      proj2 = transpose([
+        [0, 1, 1],
+        [1, 0, 1],
+        [0, 0, 1],
+        [0,.3, 1]
+      ]);
+      // Id * proj1 = (v1,v2,v3,v4)^T
+      // (v1,v2,v3,v4) * inv(proj1) = Id
+      // P = inverse(proj1) * proj2
+      // errc(matrixrowcolumn(proj1));
+      // errc(matrixrowcolumn(proj2));
+      P = proj2 * inverse(proj1);
 
       before = chords_1;
       after = chords_1;
       afterset = false;
       idx = 1;
+
       while(!afterset & (idx <= length(chords)),
         if(chords_idx_2 > yttime,
           afterset = true;
@@ -67,17 +52,33 @@
 
       pt1 = get(chordtopt, before_1);
       pt2 = get(chordtopt, after_1);
-      t   = if(after_2 == before_2,
-        0,
-        (after_2 - yttime) / (after_2 - before_2)
+      startanim = if(after_2 - before_2 > 0.5,
+        after_2 - 0.5
+      ,
+        before_2
+      );
+      t   = if((after_2 == before_2) % (yttime < startanim),
+        1,
+        (after_2 - yttime) / (after_2 - startanim)
       );
 
       t = 3 * t*t - 2*t*t*t; // Smoothstep
 
-      errc(pt1 + " - " + pt2 + " - " + t);
-
-      draw(P*[0,0,0,1], P*[0,2,0,1]);
-      draw(P*[0,0,0,1], P*[2,0,0,1]);
+      repeat(length(data),
+        point = data_#;
+        loc = P*point;
+        loc = [loc_1 / loc_3, loc_2 / loc_3];
+        size = 5+[point_1,point_2]*[sin(λ),cos(λ)];
+        dist = |mouse() - loc|;
+        isactive = (point == pt1) % (point == pt2);
+        if(isreal(dist),
+          if(isactive % |mouse()-loc| < 0.03,
+            drawtext(loc, names_#, size->18, align->"mid", offset->[0, -9]),
+            draw(loc, size->size, noborder->true, color->[0,0,0], alpha->0.4);
+          ),
+          draw(loc, size->size, noborder->true, color->[0,0,0], alpha->0.4);
+        );
+      );
 
       draw(P*(t * pt1 + (1-t) * pt2), color->[1,0,0]);
     </script>
@@ -98,7 +99,7 @@
         data = transpose([
           points * eigvec_(p_2) * re(sqrt(eigval_(p_2))),
           points * eigvec_(p_3) * re(sqrt(eigval_(p_3))),
-          points * eigvec_(p_4) * re(sqrt(eigval_(p_4))),
+          points * eigvec_(p_1) * re(sqrt(eigval_(p_1))),
           apply(points, 0.5)
         ]) / 0.5;
         chordtopt = dict();
@@ -124,8 +125,8 @@
         player = new YT.Player('player', {
           height: '270',
           width: '480',
-          // videoId: 'a2LFVWBmoiw',
-          videoId: 'WUe3lhh03Jo',
+          // videoId: '2kotK9FNEYU',
+          videoId: 'lSBnYnPBdU8',
           events: {
             'onReady': onPlayerReady,
           }
@@ -134,6 +135,7 @@
 
       function onPlayerReady(event) {
         // event.target.playVideo();
+        // event.target.seekTo(9, true);
         player_ready = true;
       }
 
@@ -155,7 +157,7 @@
         cjs.evokeCS(`yttime = ${time}`)
       }
 
-      fetch('./chords.txt').then(resp => {
+      fetch('./autumnleaves.txt').then(resp => {
         resp.text().then(text => {
           let lines = text.split('\n');
           let data = lines.map(line => {
