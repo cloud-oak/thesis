@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <script type="text/javascript" src="https://cindyjs.org/dist/latest/Cindy.js"></script>
+    <script type="text/javascript" src="https://cindyjs.org/dist/latest/CindyGL.js"></script>
+    <script type="text/javascript" src="https://www.youtube.com/iframe_api"></script>
+    <title>Chordpath 2d</title>
+  </head>
+
+  <body>
+    <div id="CSCanvas" class="CindyJS-widget" style="position: relative; width: 640px; height: 640px;"></div>
+    <div id="player"></div>
+    <script id="csdraw" type="text/x-cindyscript">
+      javascript("updatetime()");
+      before = chords_1;
+      after = chords_1;
+      afterset = false;
+      idx = 1;
+
+      while(!afterset & (idx <= length(chords)),
+        if(chords_idx_2 > yttime,
+          afterset = true;
+          after = chords_idx;
+        ,
+          before = chords_idx;
+        );
+        idx = idx + 1;
+      );
+      if(idx > length(chords),
+        after = chords_(length(chords));
+      );
+
+      pt1 = get(chordtopt, before_1);
+      pt2 = get(chordtopt, after_1);
+      startanim = if(after_2 - before_2 > 0.5,
+        after_2 - 0.5
+      ,
+        before_2
+      );
+      t   = if((after_2 == before_2) % (yttime < startanim),
+        1,
+        (after_2 - yttime) / (after_2 - startanim)
+      );
+
+      t = 3 * t*t - 2*t*t*t; // Smoothstep
+
+      repeat(length(data),
+        point = data_#;
+        loc = point;
+        // loc = [loc_1 / loc_3, loc_2 / loc_3];
+        // size = 5+[point_1,point_2]*[sin(λ),cos(λ)];
+        dist = |mouse() - loc|;
+        isactive = (point == pt1) % (point == pt2);
+        if(isreal(dist) & (isactive % |mouse()-loc| < 0.03),
+          drawtext(loc, names_#, size->18, align->"mid", offset->[0, -9]),
+          draw(loc, size->size, noborder->true, color->[0,0,0], alpha->0.5);
+        );
+      );
+
+      draw((t * pt1 + (1-t) * pt2), color->[1,0,0]);
+    </script>
+    <script id="csinit" type="text/x-cindyscript">
+      λ = pi / 6;
+      scl = 3;
+      yttime = 0;
+      chords = [["C", 0]];
+      data = [];
+
+      /*
+      chordcolor(chordname) := (
+        startidx = 1;
+        if(chordname_2 == "b", startidx = 2);
+        if(substring(chordname, startidx, length(chordname)) == "maj7",
+          [1,0,0],
+          [0,1,0]
+        )
+      );
+      */
+
+      testchord = "Bbo";
+      errc(testchord_2);
+  
+      dopca(points) := (
+        mean = sum(points) / length(points);
+        points = apply(points, #-mean);
+        cov = transpose(points) * points / length(points);
+        eigval = eigenvalues(cov);
+        eigvec = eigenvectors(cov);
+        p = sort([1,2,3,4], -eigval_#);
+        data = transpose([
+          points * eigvec_(p_2) * re(sqrt(eigval_(p_2))),
+          points * eigvec_(p_1) * re(sqrt(eigval_(p_1)))
+        ]) / 1.3;
+        chordtopt = dict();
+        repeat(length(data),
+          chordtopt = put(chordtopt, names_#, data_#);
+        );
+      );
+    </script>
+    <script id="csmousedrag" type="text/x-cindyscript">
+      d = mouse()-lastmouse;
+      λ = λ-5*d.x;
+      lastmouse = mouse();
+    </script>
+    <script id="csmousedown" type="text/x-cindyscript">
+      lastmouse = mouse();
+    </script>
+    </div>
+    </div>
+    <script type="text/javascript">
+      var player;
+      var player_ready = false;
+      function onYouTubeIframeAPIReady() {
+        player = new YT.Player('player', {
+          height: '270',
+          width: '480',
+          // videoId: '2kotK9FNEYU',
+          videoId: 'lSBnYnPBdU8',
+          events: {
+            'onReady': onPlayerReady,
+          }
+        });
+      }
+
+      function onPlayerReady(event) {
+        // event.target.playVideo();
+        // event.target.seekTo(9, true);
+        player_ready = true;
+      }
+
+      const cjs = CindyJS({
+        scripts: "cs*",
+        autoplay: true,
+        ports: [{
+          id: "CSCanvas",
+          transform: [{
+            visibleRect: [-1, 1, 1, -1]
+          }],
+        }]
+      });
+
+      window.updatetime = function() {
+        let time = 0;
+        if(player_ready)
+          time = player.getCurrentTime()
+        cjs.evokeCS(`yttime = ${time}`)
+      }
+
+      fetch('./autumnleaves.txt').then(resp => {
+        resp.text().then(text => {
+          let lines = text.split('\n');
+          let data = lines.map(line => {
+            const [chord, timestamp] = line.split(';');
+            return `"${chord}",${timestamp}`;
+          }).join('],[');
+          data = '[[' + data + ']]'
+          cjs.evokeCS(`chords = ${data};`);
+        });
+      });
+      fetch('./metadata.tsv').then(resp => {
+        resp.text().then(text => {
+          let lines = text.split('\n');
+          let names = lines.slice(3, lines.length-1).map(x => `"${x}"`);
+          cjs.evokeCS(`names=[${names}]`);
+        });
+      });
+      fetch('./tensors.tsv').then(resp => {
+        resp.text().then(text => {
+          let lines = text.split('\n');
+          let data = lines.slice(3, lines.length-1).map(line =>
+            line.split('\t').join(',')
+          ).join('],[');
+          data = '[[' + data + ']]'
+          cjs.evokeCS(`dopca(${data});`);
+        });
+      });
+    </script>
+  </body>
+</html>
