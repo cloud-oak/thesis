@@ -272,7 +272,11 @@ const init = function() {
   playing = false;
   x    = (t => t * 60);
   xinv = (t => t / 60);
-  y    = (p => (96 - p) * 10);
+
+  const highest = d3.max(original_melody.map(n => n.note));
+  console.log(highest);
+
+  y    = (p => (24+highest - p) * 10);
 
   progression = original_progression;
   melody = original_melody;
@@ -460,6 +464,7 @@ const init = function() {
 };
 
 const load_song = function(song) {
+  console.log(song);
   fetch(`leadsheets/${song}.ls`)
     .then(resp => resp.text())
     .then((data) => {
@@ -541,11 +546,65 @@ const load_song = function(song) {
     });
 }
 
-const selector = d3.select('#song_selector');
-const onchange = function() {
-  const node = selector.node();
-  const song = node.options[node.selectedIndex].value;
-  load_song(song);
+const selector = document.getElementById('song_selector');
+const selector_contents = document.getElementById('song_contents');
+const song_search = document.getElementById('song_search');
+
+const toTitleCase = function (e){var t=/^(a|an|and|as|at|but|by|en|for|if|in|of|on|or|the|to|vs?\.?|via)$/i;return e.replace(/([^\W_]+[^\s-]*) */g,function(e,n,r,i){return r>0&&r+n.length!==i.length&&n.search(t)>-1&&i.charAt(r-2)!==":"&&i.charAt(r-1).search(/[^\s-]/)<0?e.toLowerCase():n.substr(1).search(/[A-Z]|\../)>-1?e:e.charAt(0).toUpperCase()+e.substr(1)})};
+
+fetch('songs.lst').then(resp => resp.text()).then(function(data) {
+  data.split('\n').map(line => {
+    if(line.startsWith('automatic/')) {
+      let a = document.createElement('a');
+      let nols = line.substr(0, line.length-3);
+      a.href = '#' + nols.replace('/', '!')
+      a.innerText = toTitleCase(nols.substr(10).replace(/_/g, ' '));
+      selector_contents.appendChild(a);
+    }
+  }
+)});
+
+window.toggledropdown = function() {
+  document.getElementById("song_selector").classList.toggle("show");
 }
-selector.on("change", onchange);
-onchange();
+
+window.filtersongs = function() {
+  let filter = song_search.value.toLowerCase();
+  let elements = selector.getElementsByTagName('a');
+  for(let i = 0; i < elements.length; i++) {
+    let text = elements[i].innerText;
+    if(text.toLowerCase().indexOf(filter) > -1) 
+      elements[i].style.display = '';
+    else
+      elements[i].style.display = 'none';
+  }
+}
+
+const hashchanged = function(hash) {
+  let song = hash.substr(1).replace(/!/g, '/');
+  load_song(song);
+  if(song.startsWith('automatic/'))
+    song = song.substr(10);
+  document.getElementById('songname').innerText = toTitleCase(song.replace(/_/g, ' '));
+}
+
+if ("onhashchange" in window) { // event supported?
+    window.onhashchange = function () {
+      hashchanged(window.location.hash);
+    }
+}
+else { // event not supported:
+    var storedHash = window.location.hash;
+    window.setInterval(function () {
+        if (window.location.hash != storedHash) {
+            storedHash = window.location.hash;
+            hashchanged(storedHash);
+        }
+    }, 100);
+}
+
+if(window.location.hash == '')
+{
+  window.location.hash = 'autumn_leaves'
+}
+hashchanged(window.location.hash);
