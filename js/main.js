@@ -267,6 +267,7 @@ const draw_buttons = function(play, pause, stop) {
   }
 }
 
+// Initialize...
 const init = function() {
   playing = false;
   x    = (t => t * 60);
@@ -407,11 +408,27 @@ const init = function() {
     d3.select('#improvise')
       .on('click', function() {
         for(let start = 4; start < duration - 8; start += 8) {
-          const chords    = progression.filter(t => t.start >= start && t.start <= start+8);
-          const submelody = original_melody.filter(t => t.start >= start && t.start <= start+8);
+          const filter_and_crop = seq => seq
+            .filter(t => t.start+t.duration >= start || t.start <= start+8)
+            .map(t => {
+              let t2 = Object.create(t);
+              if(t2.start < start) t2.start = start;
+              if(t2.start + t2.duration < start+8) t2.duration = start+8 - t2.duration;
+              return t2
+            });
+
+          const chords      = filter_and_crop(progression);
+          const chords_orig = filter_and_crop(original_progression);
+          const submelody   = filter_and_crop(original_melody);
 
           let chord_progression = new Array(8).fill(mm.constants.NO_CHORD);
+          let chord_progression_orig = new Array(8).fill(mm.constants.NO_CHORD);
           for(let beat = 0; beat < 8; ++beat) {
+            for(let c of chords_orig) {
+              if(c.start <= beat+start && c.start+c.duration > beat+start) {
+                chord_progression_orig[beat] = harmony.chordname_tonal(c);
+              }
+            }
             for(let c of chords) {
               if(c.start <= beat+start && c.start+c.duration > beat+start) {
                 chord_progression[beat] = harmony.chordname_tonal(c);
@@ -421,7 +438,7 @@ const init = function() {
           console.log(chord_progression);
 
           const notesequence = harmony.melody_to_notesequence(submelody, -start);
-          mvae.encode([notesequence], chord_progression).then(function(latent) {
+          mvae.encode([notesequence], chord_progression_orig).then(function(latent) {
             // Perturb latent code
             latent = mm.tf.add(latent, latent_noise);
             mvae.decode(latent, null, chord_progression).then(function(res) {
