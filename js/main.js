@@ -307,7 +307,8 @@ const init = function() {
   const gettime = function() {
     return -xinv(scroller.node().transform.baseVal.consolidate().matrix.e);
   };
-  const b2ms = (beats => 1000 * 60 / bpm * beats);
+  const b2ms     = (beats => 1000 * 60 / bpm * beats);
+  const humanize = (ms => Math.max(0, 60 * (Math.random() - 0.5) + ms));
   const play = function() {
     scroller.interrupt();
     playing = true;
@@ -335,7 +336,7 @@ const init = function() {
       }
       note_idx++;
       if(note_idx < melody.length) {
-        setTimeout(playnextnote, b2ms(melody[note_idx].start - gettime()));
+        setTimeout(playnextnote, humanize(b2ms(melody[note_idx].start - gettime())));
       }
     };
     const playnextchord = function() {
@@ -352,7 +353,7 @@ const init = function() {
       }
       chord_idx++;
       if(chord_idx < progression.length) {
-        setTimeout(playnextchord, b2ms(progression[chord_idx].start - gettime()));
+        setTimeout(playnextchord, humanize(b2ms(progression[chord_idx].start - gettime())));
       }
     };
     const playnextdrums = function() {
@@ -364,8 +365,9 @@ const init = function() {
       }
       beat_idx = (beat_idx + 1) % beat.length;
       const delay = b2ms((((beat[beat_idx].start - gettime()) % 4) + 4) % 4);
-      setTimeout(playnextdrums, delay);
+      setTimeout(playnextdrums, humanize(delay));
     };
+
     setTimeout(playnextnote,  b2ms(melody[note_idx].start - time));
     setTimeout(playnextchord, b2ms(progression[chord_idx].start - time));
     setTimeout(playnextdrums, b2ms(beat[beat_idx].start - time));
