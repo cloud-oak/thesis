@@ -11,6 +11,7 @@ var midi_ready;
 var key;
 var scroller;
 var x, xinv, y;
+var height, width;
 
 const D = {bass: 35, ride: 51, hat_pedal: 44}
 const beat = [
@@ -21,7 +22,6 @@ const beat = [
   {notes: [D.ride, D.bass, D.hat_pedal], duration:2/3},
   {notes: [D.ride], duration:1/3},
 ].map(harmony.counttime())
-
 
 MIDI.loadPlugin({
   soundfontUrl: "./soundfont/selection/",
@@ -136,7 +136,7 @@ const prepare_button = function(base, name, px, py, w, h, symbol) {
   button.append('rect')
     .attr('x', 0).attr('y', 0)
     .attr('width', w).attr('height', h)
-    .style('fill', 'white')
+    .style('fill', 'white');
   symbol(button);
   const surface = button.append('rect')
     .attr('x', 0).attr('y', 0)
@@ -144,6 +144,30 @@ const prepare_button = function(base, name, px, py, w, h, symbol) {
     .style('fill', 'rgba(255,255,255,0.01')
     .style('stroke', 'black');
   return surface;
+}
+
+const fa_button = function(base, name, px, py, w, h, glyph) {
+  return prepare_button(base, name, px, py, w, h, x => {
+    x.append('text')
+      .text(glyph)
+      .attr('font-family', 'FontAwesome')
+      .attr('y', 36)
+      .attr('x', 25)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '30px');
+  });
+}
+
+const text_button = function(base, name, px, py, w, h) {
+  return prepare_button(base, name, px, py, w, h, x => {
+    x.append('text')
+      .text(name)
+      .attr('x', w/2)
+      .attr('y', h/2+8)
+      .attr('text-anchor', 'middle')
+      .style('font-family', 'Patrick Hand')
+      .style('font-size', '18pt');
+})
 }
 
 const draw_buttons = function(play, pause, stop) {
@@ -158,64 +182,32 @@ const draw_buttons = function(play, pause, stop) {
 
   let more_label;
   let is_extended = false;
-  prepare_button(button_pane, 'more', 0, 0, 50, 50, x => {
-    const transformer = x.append('g').attr('transform', `translate(25, 25)`);
-    more_label = transformer.append('g')
-      .attr('transform', 'rotate(270)');
-    more_label.append('text')
-      .text('⚙')
-      .attr('y', 8)
-      .attr('text-anchor', 'middle')
-      .style('font-size', '25px');
-  }).on('click', function() {
-    is_extended = !is_extended;
-    const dur = 500;
-    options.transition()
-      .duration(dur)
-      .attr('transform', is_extended ? 'translate(0, 60) scale(1,1)' : 'translate(0, 60) scale(1,0)')
-      .ease(d3.easeCubic);
-    more_label.transition()
-      .duration(dur)
-      .attr('transform', is_extended ? 'rotate(90)' : 'rotate(270)')
+  fa_button(button_pane, 'more', 0, 0, 50, 50, '')
+    .on('click', function() {
+      is_extended = !is_extended;
+      const dur = 500;
+      options.transition()
+        .duration(dur)
+        .attr('transform', is_extended ? 'translate(0, 60) scale(1,1)' : 'translate(0, 60) scale(1,0)')
+        .ease(d3.easeCubic);
+      d3.select("#buttons").transition()
+        .duration(dur)
+        .attr('transform', is_extended ? `translate(${(width-230)/2}, ${height-360})` :
+                                         `translate(${(width-230)/2}, ${height-60})`)
+        .ease(d3.easeCubic);
   });
-  prepare_button(button_pane, 'play', 60, 0, 50, 50, x => {
-    x.append('path')
-      .attr('d', `M -${0.5*scl} -${Math.sqrt(3)/2*scl}` +
-                 `L -${0.5*scl} ${ Math.sqrt(3)/2*scl}` +
-                 `L ${scl} 0` +
-                 `L -${0.5*scl} -${Math.sqrt(3)/2*scl}`)
-      .attr('transform', 'translate(25, 25)')
-      .style('fill', 'black');
-  }).on('click', function() { play() });
-  prepare_button(button_pane, 'pause', 120, 0, 50, 50, x => {
-    x.append('rect')
-      .attr('x', -scl)
-      .attr('y', -scl)
-      .attr('height', 2*scl)
-      .attr('width', 4*scl/5)
-      .attr('transform', 'translate(25, 25)');
-    x.append('rect')
-      .attr('x', scl/5)
-      .attr('y', -scl)
-      .attr('height', 2*scl)
-      .attr('width', 4*scl/5)
-      .attr('transform', 'translate(25, 25)');
-  }).on('click', function() { pause() });
-  prepare_button(button_pane, 'stop', 180, 0, 50, 50, x => {
-    x.append('rect')
-      .attr('x', -scl).attr('y', -scl)
-      .attr('width', 2*scl).attr('height', 2*scl)
-      .attr('transform', 'translate(25, 25)');
-  }).on('click', function() { stop() });
+  fa_button(button_pane, 'shuffle', 60, 0, 50, 50, '')
+    .on('click', function() {});
+  fa_button(button_pane, 'play', 120, 0, 50, 50, '')
+    .on('click', play);
+  fa_button(button_pane, 'pause', 120, 0, 50, 50, '')
+    .on('click', pause());
+  fa_button(button_pane, 'stop', 180, 0, 50, 50, '')
+    .on('click', function() { stop() });
+  d3.select('#pause').style('visibility', 'hidden');
+
   let dy = 0;
-  prepare_button(options, 'original', 0, dy, 170, 50, x => {
-    x.append('text')
-      .text('original')
-      .attr('x', 170/2)
-      .attr('y', 33)
-      .attr('text-anchor', 'middle')
-      .style('font-family', 'Patrick Hand')
-      .style('font-size', '18pt');
+  text_button(options, 'original', 0, dy, 230, 50, x => {
   }).on('click', function() {
     progression = original_progression;
     melody = original_melody;
@@ -223,40 +215,16 @@ const draw_buttons = function(play, pause, stop) {
     draw_chords();
   });
   dy += 60;
-  prepare_button(options, 'reharmonize', 0, dy, 170, 50, x => {
-    x.append('text')
-      .text('reharmonize')
-      .attr('x', 170/2)
-      .attr('y', 33)
-      .attr('text-anchor', 'middle')
-      .style('font-family', 'Patrick Hand')
-      .style('font-size', '18pt');
-  }).on('click', function() {
-    progression = harmony.reharmonize(original_progression, key);
-    draw_chords();
-  });
+  text_button(options, 'reharmonize', 0, dy, 230, 50)
+    .on('click', function() {
+      progression = harmony.reharmonize(original_progression, key);
+      draw_chords();
+    });
   dy += 60;
-  prepare_button(options, 'improvise', 0, dy, 170, 50, x => {
-    x.append('text')
-      .text('improvise')
-      .attr('x', 170/2)
-      .attr('y', 33)
-      .attr('text-anchor', 'middle')
-      .style('font-family', 'Patrick Hand')
-      .style('font-size', '18pt')
-      .style('fill', 'gray');
-  })
+  text_button(options, 'improvise', 0, dy, 230, 50)
   for(const el of ['melody', 'harmony', 'bass', 'drums']) {
     dy += 60;
-    const btn = prepare_button(options, el, 0, dy, 170, 50, x => {
-      x.append('text')
-        .text(el)
-        .attr('x', 170/2)
-        .attr('y', 33)
-        .attr('text-anchor', 'middle')
-        .style('font-family', 'Patrick Hand')
-        .style('font-size', '18pt');
-    })
+    const btn = text_button(options, el, 0, dy, 230, 50)
     btn.on('click', function() {
       enabled[el] = !enabled[el];
       if(enabled[el])
@@ -270,13 +238,6 @@ const draw_buttons = function(play, pause, stop) {
 // Initialize...
 const init = function() {
   playing = false;
-  x    = (t => t * 60);
-  xinv = (t => t / 60);
-
-  const highest = d3.max(original_melody.map(n => n.note));
-  console.log(highest);
-
-  y    = (p => (24+highest - p) * 10);
 
   progression = original_progression;
   melody = original_melody;
@@ -289,6 +250,13 @@ const init = function() {
     .append('svg')
     .style('height', '100vh')
     .style('width', '100vw');
+
+  x    = (t => t * 60);
+  xinv = (t => t / 60);
+  y    = (p => (24+highest - p) * 10);
+
+  const highest = d3.max(original_melody.map(n => n.note));
+  console.log(highest);
 
   const container = svg.append('g').attr('id', 'container')
     .attr('transform', 'translate(100,0)');
@@ -312,6 +280,8 @@ const init = function() {
   const play = function() {
     scroller.interrupt();
     playing = true;
+    d3.select("#pause").style("visibility", "visible");
+    d3.select("#play").style("visibility", "hidden");
     const time = gettime();
     scroller.transition()
       .duration(b2ms(duration - time))
@@ -373,8 +343,7 @@ const init = function() {
     setTimeout(playnextdrums, b2ms(beat[beat_idx].start - time));
   };
   const stop = function() {
-    scroller.interrupt();
-    playing = false;
+    pause();
     scroller.transition()
       .duration(500)
       .attr('transform', 'translate(0,0)');
@@ -382,11 +351,14 @@ const init = function() {
   const pause = function() {
     scroller.interrupt();
     playing = false;
+    d3.select("#pause").style("visibility", "hidden");
+    d3.select("#play").style("visibility", "visible");
   };
   draw_notes();
   draw_chords();
   draw_barlines(duration);
   draw_buttons(play, pause, stop);
+  handle_resize();
   d3.select('body')
     .on('keydown', function() {
       const keycode = d3.event.keyCode;
@@ -464,6 +436,15 @@ const init = function() {
       .style('fill', 'black');
   });
 };
+
+const handle_resize = function() {
+  width = document.getElementById("drawing").clientWidth;
+  height = document.getElementById("drawing").clientHeight;
+
+  d3.select("g#buttons")
+    .attr("transform", `translate(${(width-230)/2}, ${height-60})`)
+  y = (p => (24 + highest - p) * 10);
+}
 
 const load_song = function(song) {
   console.log(song);
@@ -552,15 +533,13 @@ const selector = document.getElementById('song_selector');
 const selector_contents = document.getElementById('song_contents');
 const song_search = document.getElementById('song_search');
 
-const toTitleCase = function (e){var t=/^(a|an|and|as|at|but|by|en|for|if|in|of|on|or|the|to|vs?\.?|via)$/i;return e.replace(/([^\W_]+[^\s-]*) */g,function(e,n,r,i){return r>0&&r+n.length!==i.length&&n.search(t)>-1&&i.charAt(r-2)!==":"&&i.charAt(r-1).search(/[^\s-]/)<0?e.toLowerCase():n.substr(1).search(/[A-Z]|\../)>-1?e:e.charAt(0).toUpperCase()+e.substr(1)})};
-
 fetch('songs.lst').then(resp => resp.text()).then(function(data) {
   data.split('\n').map(line => {
     if(line.startsWith('automatic/')) {
       let a = document.createElement('a');
       let nols = line.substr(0, line.length-3);
       a.href = '#' + nols.replace('/', '!')
-      a.innerText = toTitleCase(nols.substr(10).replace(/_/g, ' '));
+      a.innerText = util.toTitleCase(nols.substr(10).replace(/_/g, ' '));
       selector_contents.appendChild(a);
     }
   }
@@ -583,11 +562,12 @@ window.filtersongs = function() {
 }
 
 const hashchanged = function(hash) {
+  document.getElementById("song_selector").classList.remove("show");
   let song = hash.substr(1).replace(/!/g, '/');
   load_song(song);
   if(song.startsWith('automatic/'))
     song = song.substr(10);
-  document.getElementById('songname').innerText = toTitleCase(song.replace(/_/g, ' '));
+  document.getElementById('songname').innerText = util.toTitleCase(song.replace(/_/g, ' '));
 }
 
 if ("onhashchange" in window) { // event supported?
@@ -605,6 +585,7 @@ else { // event not supported:
     }, 100);
 }
 
+window.addEventListener("resize", handle_resize);
 if(window.location.hash == '')
 {
   window.location.hash = 'autumn_leaves'
