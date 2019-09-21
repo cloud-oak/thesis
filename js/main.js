@@ -9,7 +9,7 @@ var playing = false;
 var enabled = {melody:true, harmony:true, bass:true, drums:true};
 var key;
 var scroller;
-var x, xinv, y;
+var x, xinv, y, duration;
 var height, width;
 
 const D = {bass: 35, ride: 51, hat_pedal: 44}
@@ -168,6 +168,11 @@ const text_button = function(base, name, px, py, w, h) {
 })
 }
 
+window.reharmonize = function() {
+  progression = harmony.reharmonize(original_progression, key);
+  draw_chords();
+}
+
 const draw_buttons = function(play, pause, stop) {
   const select = d3.select('#buttons');
   button_pane = !select.empty() ? select : svg.append('g').attr('id', 'buttons');
@@ -239,7 +244,10 @@ const draw_buttons = function(play, pause, stop) {
       slide_panes();
   });
   fa_button(button_pane, 'shuffle', 150, 0, 65, 65, '')
-    .on('click', function() {});
+    .on('click', function() {
+      window.reharmonize();
+      window.improvize();
+    });
   fa_button(button_pane, 'play', 225, 0, 65, 65, '')
     .on('click', play);
   fa_button(button_pane, 'pause', 225, 0, 65, 65, '')
@@ -257,10 +265,8 @@ const draw_buttons = function(play, pause, stop) {
     draw_chords();
   });
   dy += 75;
-  text_button(edit_pane, 'reharmonize', 0, dy, 365, 65)
+  text_button(edit_pane, 'reharmonise', 0, dy, 365, 65)
     .on('click', function() {
-      progression = harmony.reharmonize(original_progression, key);
-      draw_chords();
     });
   dy += 75;
   text_button(edit_pane, 'improvise', 0, dy, 365, 65)
@@ -423,58 +429,60 @@ const init = function() {
       }
     });
 
+  window.improvize = function() {
+    const latent_noise = mm.tf.randomNormal([1, 128], 0, 0.3);
+    for(let start = 4; start < duration - 8; start += 8) {
+      const filter_and_crop = seq => seq
+        .filter(t => t.start+t.duration >= start || t.start <= start+8)
+        .map(t => {
+          let t2 = Object.create(t);
+          if(t2.start < start) t2.start = start;
+          if(t2.start + t2.duration < start+8) t2.duration = start+8 - t2.duration;
+          return t2
+        });
+
+      const chords      = filter_and_crop(progression);
+      const chords_orig = filter_and_crop(original_progression);
+      const submelody   = filter_and_crop(original_melody);
+
+      let chord_progression = new Array(8).fill(mm.constants.NO_CHORD);
+      let chord_progression_orig = new Array(8).fill(mm.constants.NO_CHORD);
+      for(let beat = 0; beat < 8; ++beat) {
+        for(let c of chords_orig) {
+          if(c.start <= beat+start && c.start+c.duration > beat+start) {
+            chord_progression_orig[beat] = harmony.chordname_tonal(c);
+          }
+        }
+        for(let c of chords) {
+          if(c.start <= beat+start && c.start+c.duration > beat+start) {
+            chord_progression[beat] = harmony.chordname_tonal(c);
+          }
+        }
+      }
+      console.log(chord_progression);
+
+      const notesequence = harmony.melody_to_notesequence(submelody, -start);
+      mvae.encode([notesequence], chord_progression_orig).then(function(latent) {
+        // Perturb latent code
+        latent = mm.tf.add(latent, latent_noise);
+        mvae.decode(latent, null, chord_progression).then(function(res) {
+          const pre  = melody.filter(t => t.start < start);
+          const post = melody.filter(t => t.start >= start+8);
+          console.log(res[0]);
+          const newnotes = harmony.notesequence_to_melody(res[0], start);
+          //aconsole.log(newnotes[0]);
+          melody = pre.concat(newnotes).concat(post);
+          window.melody = melody;
+          draw_notes();
+        });
+      });
+    }
+  }
+
   window.mvae = mvae;
   mvae.initialize().then(function(x) {
-    const latent_noise = mm.tf.randomNormal([1, 128], 0, 0.3);
     d3.select('#improvise')
-      .on('click', function() {
-        for(let start = 4; start < duration - 8; start += 8) {
-          const filter_and_crop = seq => seq
-            .filter(t => t.start+t.duration >= start || t.start <= start+8)
-            .map(t => {
-              let t2 = Object.create(t);
-              if(t2.start < start) t2.start = start;
-              if(t2.start + t2.duration < start+8) t2.duration = start+8 - t2.duration;
-              return t2
-            });
-
-          const chords      = filter_and_crop(progression);
-          const chords_orig = filter_and_crop(original_progression);
-          const submelody   = filter_and_crop(original_melody);
-
-          let chord_progression = new Array(8).fill(mm.constants.NO_CHORD);
-          let chord_progression_orig = new Array(8).fill(mm.constants.NO_CHORD);
-          for(let beat = 0; beat < 8; ++beat) {
-            for(let c of chords_orig) {
-              if(c.start <= beat+start && c.start+c.duration > beat+start) {
-                chord_progression_orig[beat] = harmony.chordname_tonal(c);
-              }
-            }
-            for(let c of chords) {
-              if(c.start <= beat+start && c.start+c.duration > beat+start) {
-                chord_progression[beat] = harmony.chordname_tonal(c);
-              }
-            }
-          }
-          console.log(chord_progression);
-
-          const notesequence = harmony.melody_to_notesequence(submelody, -start);
-          mvae.encode([notesequence], chord_progression_orig).then(function(latent) {
-            // Perturb latent code
-            latent = mm.tf.add(latent, latent_noise);
-            mvae.decode(latent, null, chord_progression).then(function(res) {
-              const pre  = melody.filter(t => t.start < start);
-              const post = melody.filter(t => t.start >= start+8);
-              console.log(res[0]);
-              const newnotes = harmony.notesequence_to_melody(res[0], start);
-              //aconsole.log(newnotes[0]);
-              melody = pre.concat(newnotes).concat(post);
-              window.melody = melody;
-              draw_notes();
-            });
-          });
-        }
-      });
+      .on('click', function() { window.improvize() });
     d3.select('#improvise > text')
       .style('fill', 'black');
   });
