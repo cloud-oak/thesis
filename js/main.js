@@ -7,7 +7,6 @@ var original_melody, melody, original_progression, progression, scroller, svg, b
 var bpm = 100;
 var playing = false;
 var enabled = {melody:true, harmony:true, bass:true, drums:true};
-var midi_ready;
 var key;
 var scroller;
 var x, xinv, y;
@@ -33,7 +32,6 @@ MIDI.loadPlugin({
   onsuccess: function() {
     MIDI.programChange(1, MIDI.GM.byName['acoustic_bass'].number);
     MIDI.programChange(2, MIDI.GM.byName['steel_drums'].number);
-    // midi_ready();
   }
 });
 
@@ -151,10 +149,10 @@ const fa_button = function(base, name, px, py, w, h, glyph) {
     x.append('text')
       .text(glyph)
       .attr('font-family', 'FontAwesome')
-      .attr('y', 36)
-      .attr('x', 25)
+      .attr('y', h*35/50)
+      .attr('x', w/2)
       .attr('text-anchor', 'middle')
-      .style('font-size', '30px');
+      .style('font-size', `${3*h/5}px`);
   });
 }
 
@@ -177,54 +175,98 @@ const draw_buttons = function(play, pause, stop) {
 
   button_pane.attr('transform', 'translate(10, 70)');
 
-  const options = button_pane.append('g')
-    .attr('transform', 'translate(0,60) scale(1,0)')
+  const sound_pane = button_pane.append('g')
+    .attr('transform', 'translate(0,75)')
 
-  let more_label;
-  let is_extended = false;
-  fa_button(button_pane, 'more', 0, 0, 50, 50, '')
+  const edit_pane = button_pane.append('g')
+    .attr('transform', 'translate(0,75)')
+
+  let pane_shown = 'none';
+
+  const slide_panes = function() {
+    const dur = 500;
+    switch(pane_shown) {
+    case 'none':
+      button_pane.transition()
+        .duration(dur)
+        .attr('transform', `translate(${(width-365)/2}, ${height-75})`)
+      sound_pane.transition()
+        .duration(dur)
+        .attr('transform', `translate(0, 75)`)
+      edit_pane.transition()
+        .duration(dur)
+        .attr('transform', `translate(0, 75)`)
+      break;
+    case 'sound':
+      button_pane.transition()
+        .duration(dur)
+        .attr('transform', `translate(${(width-365)/2}, ${height-5*75})`)
+      sound_pane.transition()
+        .duration(dur)
+        .attr('transform', `translate(0, 75)`)
+      edit_pane.transition()
+        .duration(dur)
+        .attr('transform', `translate(0, ${5*75})`)
+      break;
+    case 'edit':
+      button_pane.transition()
+        .duration(dur)
+        .attr('transform', `translate(${(width-365)/2}, ${height-4*75})`)
+      sound_pane.transition()
+        .duration(dur)
+        .attr('transform', `translate(0, ${4*75})`)
+      edit_pane.transition()
+        .duration(dur)
+        .attr('transform', `translate(0, 75)`)
+      break;
+    }
+  }
+
+  fa_button(button_pane, 'sound', 0, 0, 65, 65, '')
     .on('click', function() {
-      is_extended = !is_extended;
-      const dur = 500;
-      options.transition()
-        .duration(dur)
-        .attr('transform', is_extended ? 'translate(0, 60) scale(1,1)' : 'translate(0, 60) scale(1,0)')
-        .ease(d3.easeCubic);
-      d3.select("#buttons").transition()
-        .duration(dur)
-        .attr('transform', is_extended ? `translate(${(width-230)/2}, ${height-360})` :
-                                         `translate(${(width-230)/2}, ${height-60})`)
-        .ease(d3.easeCubic);
+      if(pane_shown == 'sound')
+        pane_shown = 'none';
+      else
+        pane_shown = 'sound';
+      slide_panes();
   });
-  fa_button(button_pane, 'shuffle', 60, 0, 50, 50, '')
+  fa_button(button_pane, 'edit', 75, 0, 65, 65, '')
+    .on('click', function() {
+      if(pane_shown == 'edit')
+        pane_shown = 'none';
+      else
+        pane_shown = 'edit';
+      slide_panes();
+  });
+  fa_button(button_pane, 'shuffle', 150, 0, 65, 65, '')
     .on('click', function() {});
-  fa_button(button_pane, 'play', 120, 0, 50, 50, '')
+  fa_button(button_pane, 'play', 225, 0, 65, 65, '')
     .on('click', play);
-  fa_button(button_pane, 'pause', 120, 0, 50, 50, '')
-    .on('click', pause());
-  fa_button(button_pane, 'stop', 180, 0, 50, 50, '')
+  fa_button(button_pane, 'pause', 225, 0, 65, 65, '')
+    .on('click', pause);
+  fa_button(button_pane, 'stop', 300, 0, 65, 65, '')
     .on('click', function() { stop() });
   d3.select('#pause').style('visibility', 'hidden');
 
   let dy = 0;
-  text_button(options, 'original', 0, dy, 230, 50, x => {
+  text_button(edit_pane, 'original', 0, dy, 365, 65, x => {
   }).on('click', function() {
     progression = original_progression;
     melody = original_melody;
     draw_notes();
     draw_chords();
   });
-  dy += 60;
-  text_button(options, 'reharmonize', 0, dy, 230, 50)
+  dy += 75;
+  text_button(edit_pane, 'reharmonize', 0, dy, 365, 65)
     .on('click', function() {
       progression = harmony.reharmonize(original_progression, key);
       draw_chords();
     });
-  dy += 60;
-  text_button(options, 'improvise', 0, dy, 230, 50)
+  dy += 75;
+  text_button(edit_pane, 'improvise', 0, dy, 365, 65)
+  dy = 0;
   for(const el of ['melody', 'harmony', 'bass', 'drums']) {
-    dy += 60;
-    const btn = text_button(options, el, 0, dy, 230, 50)
+    const btn = text_button(sound_pane, el, 0, dy, 365, 65)
     btn.on('click', function() {
       enabled[el] = !enabled[el];
       if(enabled[el])
@@ -232,6 +274,7 @@ const draw_buttons = function(play, pause, stop) {
       else
         btn.style('fill', 'rgba(255,255,255,0.5)');
     });
+    dy += 75;
   }
 }
 
@@ -253,9 +296,9 @@ const init = function() {
 
   x    = (t => t * 60);
   xinv = (t => t / 60);
-  y    = (p => (24+highest - p) * 10);
 
   const highest = d3.max(original_melody.map(n => n.note));
+  y    = (p => (24+highest - p) * 10);
   console.log(highest);
 
   const container = svg.append('g').attr('id', 'container')
@@ -276,7 +319,7 @@ const init = function() {
     return -xinv(scroller.node().transform.baseVal.consolidate().matrix.e);
   };
   const b2ms     = (beats => 1000 * 60 / bpm * beats);
-  const humanize = (ms => Math.max(0, 60 * (Math.random() - 0.5) + ms));
+  const humanize = (ms => Math.max(0, 30 * (Math.random() - 0.5) + ms));
   const play = function() {
     scroller.interrupt();
     playing = true;
@@ -314,7 +357,7 @@ const init = function() {
       const chord = progression[chord_idx];
       const notes = harmony.CHORDS[chord.mode].map(x => x+chord.base+48);
       if(enabled.bass) {
-        MIDI.noteOn(  1, notes[0]-12, 90, 0);
+        MIDI.noteOn(  1, notes[0]-12, 120, 0);
         MIDI.noteOff( 1, notes[0]-12, b2ms(chord.duration) / 1000);
       }
       if(enabled.harmony) {
@@ -330,7 +373,7 @@ const init = function() {
      if(!playing) return;
       const chord = beat[beat_idx];
       if(enabled.drums) {
-        MIDI.chordOn( 2, chord.notes, 90, 0);
+        MIDI.chordOn( 2, chord.notes, 70, 0);
         MIDI.chordOff(2, chord.notes, b2ms(chord.duration) / 1000);
       }
       beat_idx = (beat_idx + 1) % beat.length;
@@ -442,8 +485,8 @@ const handle_resize = function() {
   height = document.getElementById("drawing").clientHeight;
 
   d3.select("g#buttons")
-    .attr("transform", `translate(${(width-230)/2}, ${height-60})`)
-  y = (p => (24 + highest - p) * 10);
+    .attr("transform", `translate(${(width-365)/2}, ${height-75})`)
+  // y = (p => (24 + highest - p) * 10);
 }
 
 const load_song = function(song) {
