@@ -266,8 +266,7 @@ const draw_buttons = function(play, pause, stop) {
   });
   dy += 75;
   text_button(edit_pane, 'reharmonise', 0, dy, 365, 65)
-    .on('click', function() {
-    });
+    .on('click', function() { window.reharmonize() });
   dy += 75;
   text_button(edit_pane, 'improvise', 0, dy, 365, 65)
   dy = 0;
