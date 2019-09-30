@@ -1,0 +1,27 @@
+ <html>
+  <head> </head>
+  <body>
+    <!-- Load ONNX.js -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxjs/dist/onnx.min.js"></script>
+    <!-- Code that consume ONNX.js -->
+    <script>
+      // create a session
+      ENV.debug = true;
+      const session = new onnx.InferenceSession('cpu');
+      // load the ONNX model file
+      session.loadModel("./polished.onnx").then(() => {
+        // generate model input
+        const x = new Float32Array(1 * 32 * 90).fill(1);
+        const tensorX = new onnx.Tensor(x, 'float32', [1, 32, 90]);
+        // execute the model
+        session.run([tensorX]).then(output => {
+          // consume the output
+          console.log(`model output tensor: ${output}.`);
+          window.output = output;
+          const outputTensor = output.values().next().value;
+          console.log(`model output tensor: ${outputTensor}.`);
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -216,7 +216,32 @@ const notesequence_to_melody = function(notesequence, shift) {
       changed: true
     }
   })
+}
 
+const pianoroll_to_melody = function(pianoroll, shift) {
+  let notes = [];
+  let start = 0;
+  for(let p = 0; p < 90; p++) {
+    let ison = false;
+    for(let t = 0; t < 32; t++) {
+      let noteon = pianoroll.get(t, p) > 0.5;
+      if(noteon && (t == 0 || !ison)) {
+        console.log(`Note wants to start at ${t}`);
+        ison = true;
+        start = t;
+      } else if(ison && (!noteon || t == 31)) {
+        ison = false;
+        if(t == 31) { t++ };
+        notes.push({
+          note: p + 19,
+          start: shift + start / 4,
+          duration: (t - start) / 4,
+          changed: true
+        });
+      }
+    }
+  }
+  return notes.sort((a, b) => (a.start - b.start));
 }
 
 const reharmonize = function(progression, key) {
@@ -242,4 +267,4 @@ const reharmonize = function(progression, key) {
   });
 };
 
-export { CHORDS, counttime, chordname, note2pitch, scales, roman, reharmonize, find_patterns, notesequence_to_melody, melody_to_notesequence, chordname_tonal };
+export { CHORDS, counttime, chordname, note2pitch, scales, roman, reharmonize, find_patterns, notesequence_to_melody, melody_to_notesequence, pianoroll_to_melody, chordname_tonal };
