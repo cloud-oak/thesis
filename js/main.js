@@ -41,6 +41,7 @@ const init_audio = function() {
     }
   });
 }
+init_audio();
 
 document.addEventListener("click", init_audio);
 
@@ -500,12 +501,13 @@ const load_song = function(song) {
           if(beats === 'e')         dur = 0.5;
           else if(beats === 's')    dur = 0.25;
           else                      dur = +beats;
-          if(triplet === 't')       dur = 2 * duration / 3;
-          else if(triplet === '.')  dur = 3 * duration / 2;
+          if(triplet === 't')       dur = 2 * dur / 3;
+          else if(triplet === '.')  dur = 3 * dur / 2;
         } else {
-          duration = default_chord;
+          dur = default_chord;
         }
-        return {base:base, mode:mode, duration:duration, reharmonized:false};
+        console.log(`${length} -> ${dur}`);
+        return {base:base, mode:mode, duration:dur, reharmonized:false};
       };
 
       key = parse_chord(header.split(' ')[1]);
@@ -602,16 +604,23 @@ if(window.location.hash == '')
 }
 hashchanged(window.location.hash);
 
-const onnx_session = new onnx.InferenceSession('wasm');
-onnx_session.loadModel("./transcoder_bad.onnx").then(() => {
+const onnx_session = new onnx.InferenceSession('cpu');
+onnx_session.loadModel("./transcoder_huge.onnx").then(() => {
   handle_resize();
   d3.select('#improvise_cnn > text')
     .style('fill', 'black');
   console.log('finished loading cnn');
   window.improvise_cnn = function() {
     console.log('Improvising using CNN');
+    const LATENT = 32;
+    let noise = new Tensor(new Float32Array(LATENT).fill(0), "float32", [1, LATENT]);
+    for(let i = 0; i < LATENT; i++) {
+      noise.set(Math.random(), 0, i)
+    }
+    console.log(noise);
+
     const recurse = function(start) {
-      let pianoroll = new Tensor(new Float32Array(32 * 90).fill(0), "float32", [1, 32, 90]);
+      let pianoroll = new Tensor(new Float32Array(32 * 36).fill(-1), "float32", [1, 32, 36]);
       for(let note of original_melody) {
         if(note.note === undefined) {
           continue;
@@ -620,12 +629,12 @@ onnx_session.loadModel("./transcoder_bad.onnx").then(() => {
         let e = Math.floor(4 * (note.start + note.duration - start));
         if(e >= 0 || s < 32) {
           for(let i = Math.max(0, s); i < Math.min(32, e); i++) {
-            pianoroll.set(1.001, [0, i, note.note - 19]);
+            pianoroll.set(1.001, [0, i, note.note - 36]);
           }
         }
       }
       
-      onnx_session.run([pianoroll]).then(output => {
+      onnx_session.run([pianoroll, noise]).then(output => {
         const output_pianoroll = output.values().next().value;
 
         const pre  = melody.filter(t => t.start < start);
@@ -646,14 +655,17 @@ onnx_session.loadModel("./transcoder_bad.onnx").then(() => {
   }
 });
 
+console.log('declaring mvae')
 const mvae = new mm.MusicVAE("https://storage.googleapis.com/magentadata/js/checkpoints/music_vae/mel_chords");
-mvae.initialize().then(function(x) {
+console.log('done. initializing...')
+mvae.initialize().then(function() {
+  console.log('done.')
   d3.select('#improvise_mvae > text')
     .style('fill', 'black');
   window.improvise_mvae = function() {
     console.log('improvising with MVAE');
     const latent_noise = mm.tf.randomNormal([1, 128], 0, 0.3);
-    for(let start = 4; start < duration - 8; start += 8) {
+    const recurse = function(start) {
       const filter_and_crop = seq => seq
         .filter(t => t.start+t.duration >= start || t.start <= start+8)
         .map(t => {
@@ -681,7 +693,6 @@ mvae.initialize().then(function(x) {
           }
         }
       }
-      console.log(chord_progression);
 
       const notesequence = harmony.melody_to_notesequence(submelody, -start);
       mvae.encode([notesequence], chord_progression_orig).then(function(latent) {
@@ -690,14 +701,16 @@ mvae.initialize().then(function(x) {
         mvae.decode(latent, null, chord_progression).then(function(res) {
           const pre  = melody.filter(t => t.start < start);
           const post = melody.filter(t => t.start >= start+8);
-          console.log(res[0]);
           const newnotes = harmony.notesequence_to_melody(res[0], start);
-          //aconsole.log(newnotes[0]);
           melody = pre.concat(newnotes).concat(post);
           window.melody = melody;
           draw_notes();
+          if(start + 8 < duration) {
+            recurse(start + 8);
+          }
         });
       });
     }
+    recurse(4);
   }
 });

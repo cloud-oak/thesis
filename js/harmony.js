@@ -221,19 +221,18 @@ const notesequence_to_melody = function(notesequence, shift) {
 const pianoroll_to_melody = function(pianoroll, shift) {
   let notes = [];
   let start = 0;
-  for(let p = 0; p < 90; p++) {
+  for(let p = 0; p < 36; p++) {
     let ison = false;
     for(let t = 0; t < 32; t++) {
       let noteon = pianoroll.get(t, p) > 0.5;
       if(noteon && (t == 0 || !ison)) {
-        console.log(`Note wants to start at ${t}`);
         ison = true;
         start = t;
       } else if(ison && (!noteon || t == 31)) {
         ison = false;
         if(t == 31) { t++ };
         notes.push({
-          note: p + 19,
+          note: p + 48,
           start: shift + start / 4,
           duration: (t - start) / 4,
           changed: true
