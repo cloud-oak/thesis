@@ -29,9 +29,12 @@ if (typeof MIDI === 'undefined') MIDI = {};
 			pending --;
 		}, false);
 		audio.addEventListener('canplaythrough', function() {
-			body.removeChild(audio);
-			supports[mime] = true;
-			pending --;
+      try {
+			  body.removeChild(audio);
+        supports[mime] = true;
+        pending --;
+      } catch {
+      }
 		}, false);
 		audio.src = 'data:' + src;
 		body.appendChild(audio);

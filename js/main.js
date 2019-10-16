@@ -12,6 +12,12 @@ var scroller;
 var x, xinv, y, duration;
 var height, width;
 
+var audio_loaded = false,
+    mvae_loaded = false,
+    gan_loaded = false,
+    hidden_loaded = false;
+
+const tf = mm.tf; // Recycle Magenta's bundled Tensorflow
 
 const D = {bass: 35, ride: 51, hat_pedal: 44}
 const beat = [
@@ -23,7 +29,7 @@ const beat = [
   {notes: [D.ride], duration:1/3},
 ].map(harmony.counttime())
 
-const init_audio = function() {
+window.init_audio = function() {
   if(MIDI.noteOn !== undefined) {
     return;
   }
@@ -34,7 +40,19 @@ const init_audio = function() {
       "acoustic_bass",
       "steel_drums"
     ],
+    api: 'webaudio',
+    targetFormat: "ogg",
     onsuccess: function() {
+      audio_loaded = true;
+      d3.select('#loading_audio')
+        .remove();
+      audio_loaded = true;
+      if(mvae_loaded && gan_loaded && hidden_loaded) {
+        d3.select('#loading_overlay')
+          .transition(300)
+          .style("opacity", 0)
+          .remove();
+      }
       MIDI.programChange(1, MIDI.GM.byName['acoustic_bass'].number);
       MIDI.programChange(2, MIDI.GM.byName['steel_drums'].number);
     }
@@ -268,7 +286,7 @@ const draw_buttons = function(play, pause, stop) {
   fa_button(button_pane, 'shuffle', 150, 0, 65, 65, '')
     .on('click', function() {
       window.reharmonize();
-      window.improvize_mvae();
+      window.improvise_mvae();
     });
   fa_button(button_pane, 'play', 225, 0, 65, 65, '')
     .on('click', play);
@@ -309,8 +327,11 @@ const draw_buttons = function(play, pause, stop) {
   text_button(edit_pane, 'Gr.Hidden Markov', 220, dy, 145, 65)
     .on('click', function() { window.hidden_markov_reharmonization(true) });
   dy += 75;
-  text_button(edit_pane, 'improvize (MusicVAE)', 0, dy, 365, 65, 'improvize_mvae')
-    .on('click', function() { window.improvize_mvae(); });
+  text_button(edit_pane, 'improvise (MusicVAE)', 0, dy, 365, 65, 'improvise_mvae')
+    .on('click', function() { window.improvise_mvae(); });
+  dy += 75;
+  text_button(edit_pane, 'improvise (GAN)', 0, dy, 365, 65, 'improvise_gan')
+    .on('click', function() { window.improvise_gan(); });
   dy += 75;
   for(const el of ['melody', 'harmony', 'bass', 'drums']) {
     const btn = text_button(sound_pane, el, 0, dy, 365, 65)
@@ -341,9 +362,9 @@ const init = function() {
     .attr('id', 'svg_canvas')
     .style('height', '100vh')
     .style('width', '100vw')
-    .style('position', 'absolute')
-    .style('top', '0')
-    .style('left', '0')
+    // .style('position', 'absolute')
+    // .style('top', '0')
+    // .style('left', '0')
 
   x    = (t => t * 60);
   xinv = (t => t / 60);
@@ -475,8 +496,8 @@ const init = function() {
 };
 
 const handle_resize = function() {
-  width = document.getElementById("svg_canvas").clientWidth;
-  height = document.getElementById("svg_canvas").clientHeight;
+  width = document.getElementById("drawing").clientWidth;
+  height = document.getElementById("drawing").clientHeight;
 
   d3.select("g#buttons")
     .attr("transform", `translate(${(width-365)/2}, ${height-75})`)
@@ -633,23 +654,43 @@ if(window.location.hash == '')
 }
 hashchanged(window.location.hash);
 
-const onnx_session = new onnx.InferenceSession('cpu');
-onnx_session.loadModel("./transcoder_huge.onnx").then(() => {
-  handle_resize();
-  d3.select('#improvize_cnn > text')
-    .style('fill', 'black');
-  console.log('finished loading cnn');
-  window.improvize_cnn = function() {
-    console.log('Improvising using CNN');
-    const LATENT = 32;
-    let noise = new Tensor(new Float32Array(LATENT).fill(0), "float32", [1, LATENT]);
-    for(let i = 0; i < LATENT; i++) {
-      noise.set(Math.random(), 0, i)
+tf.loadLayersModel('nets/hidden_markov/model.json').then(net => {
+  hidden_loaded = true;
+  if(mvae_loaded && gan_loaded) {
+    d3.select('#loading_networks')
+      .remove()
+    if(audio_loaded) {
+      d3.select('#loading_overlay')
+        .transition(300)
+        .style("opacity", 0)
+        .remove();
     }
-    console.log(noise);
+  }
+  window.hidden_markov_net = net;
+})
+
+tf.loadLayersModel('nets/gan/model.json').then(net => {
+  gan_loaded = true;
+  if(mvae_loaded && hidden_loaded) {
+    d3.select('#loading_networks')
+      .remove()
+    if(audio_loaded) {
+      d3.select('#loading_overlay')
+        .transition(300)
+        .style("opacity", 0)
+        .remove();
+    }
+  }
+  d3.select('#improvise_gan > text')
+    .style('fill', 'black');
+  console.log('finished loading gan');
+  window.improvise_gan = function() {
+    console.log('Improvising using gan');
+    const LATENT = 128;
+    let noise = tf.randomNormal([1, LATENT]);
 
     const recurse = function(start) {
-      let pianoroll = new Tensor(new Float32Array(32 * 36).fill(-1), "float32", [1, 32, 36]);
+      let pianoroll = tf.buffer([1, 32, 36]);
       for(let note of original_melody) {
         if(note.note === undefined) {
           continue;
@@ -658,42 +699,45 @@ onnx_session.loadModel("./transcoder_huge.onnx").then(() => {
         let e = Math.floor(4 * (note.start + note.duration - start));
         if(e >= 0 || s < 32) {
           for(let i = Math.max(0, s); i < Math.min(32, e); i++) {
-            pianoroll.set(1.001, [0, i, note.note - 36]);
+            pianoroll.set(1, 0, i, note.note - 36);
           }
         }
       }
-      
-      onnx_session.run([pianoroll, noise]).then(output => {
-        const output_pianoroll = output.values().next().value;
 
-        const pre  = melody.filter(t => t.start < start);
-        const post = melody.filter(t => t.start >= start+8);
-        console.log(start);
-        const newnotes = harmony.pianoroll_to_melody(output_pianoroll, start);
-        melody = pre.concat(newnotes).concat(post);
-        window.melody = melody;
-        draw_notes();
-        if(start + 8 < duration) {
-          recurse(start + 8);
-        }
-      });
+      const input_pianoroll = pianoroll.toTensor().mul(2).sub(1);
+      console.log(input_pianoroll.arraySync());
+      const output_pianoroll = net.predict([noise, input_pianoroll]).arraySync()[0]
+
+      const pre  = melody.filter(t => t.start < start);
+      const post = melody.filter(t => t.start >= start+8);
+      const newnotes = harmony.pianoroll_to_melody(output_pianoroll, start);
+      melody = pre.concat(newnotes).concat(post);
+      window.melody = melody;
+      draw_notes();
+      if(start + 8 < duration) {
+        recurse(start + 8);
+      }
     }
     recurse(4);
-    for(let start = 4; start < duration - 8; start += 8) {
-    }
   }
 });
-
-
 
 console.log('declaring mvae')
 const mvae = new mm.MusicVAE("https://storage.googleapis.com/magentadata/js/checkpoints/music_vae/mel_chords");
 console.log('done. initializing...')
 mvae.initialize().then(function() {
-  console.log('done.')
-  d3.select('#improvize_mvae > text')
-    .style('fill', 'black');
-  window.improvize_mvae = function() {
+  mvae_loaded = true;
+  if(gan_loaded && hidden_loaded) {
+    d3.select('#loading_networks')
+      .remove()
+    if(audio_loaded) {
+      d3.select('#loading_overlay')
+        .transition(300)
+        .style("opacity", 0)
+        .remove();
+    }
+  }
+  window.improvise_mvae = function() {
     console.log('improvising with MVAE');
     const latent_noise = mm.tf.randomNormal([1, 128], 0, 0.3);
     const recurse = function(start) {

@@ -32,7 +32,7 @@
   <script src="js/midi/audioDetect.js"></script>
   <script src="js/midi/gm.js"></script>
   <script src="js/midi/loader.js"></script>
-  <script src="js/midi/plugin.webaudio.js"></script> --> 
+  <script src="js/midi/plugin.webaudio.js"></script>
   <!-- <script src="js/midi/plugin.audiotag.js"></script> -->
   <!-- <script src="js/midi/plugin.webmidi.js"></script> -->
 </head>
@@ -58,6 +58,13 @@
     </div>
   </div>
   <div id="drawing"></div>
+  <div id="loading_overlay">
+    <div id="loading_central" class="fa-3x">
+      <i id="spinner" class="fas fa-circle-notch fa-spin"></i>
+    </div>
+    <p id="loading_audio">Loading Audio</p>
+    <p id="loading_networks">Loading Neural Networks</p>
+  </div>
   <script src="js/vendor/modernizr-3.7.1.min.js"></script>
   <script src="js/vendor/d3.v5.min.js"></script>
   <script src="js/main.js" type="module"></script>

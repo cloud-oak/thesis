@@ -233,7 +233,7 @@ const pianoroll_to_melody = function(pianoroll, shift) {
   for(let p = 0; p < 36; p++) {
     let ison = false;
     for(let t = 0; t < 32; t++) {
-      let noteon = pianoroll.get(t, p) > 0.5;
+      let noteon = pianoroll[t][p] > 0;
       if(noteon && (t == 0 || !ison)) {
         ison = true;
         start = t;
@@ -241,7 +241,7 @@ const pianoroll_to_melody = function(pianoroll, shift) {
         ison = false;
         if(t == 31) { t++ };
         notes.push({
-          note: p + 48,
+          note: p + 36,
           start: shift + start / 4,
           duration: (t - start) / 4,
           changed: true
@@ -267,10 +267,6 @@ const reharmonize = function(progression) {
     return chord;
   });
 };
-
-tf.loadLayersModel('js/hidden_markov/model.json').then(net => {
-  window.hidden_markov_net = net;
-})
 
 const markov_reharmonize = function(progression, melody, hidden_markov=false, use_grammar=false) {
   let indices = util.range(progression.length);
