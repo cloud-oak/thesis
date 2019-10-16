@@ -2,6 +2,9 @@
 
 import * as util from './util.js';
 import * as nn from './nn.js';
+import * as markov from './markov.js';
+
+const tf = mm.tf; // Recycle the tensorflowjs version bundled by Magenta
 
 const Perfect1 = 0;
 const Half     = 1;
@@ -32,8 +35,7 @@ const CHORDS = {
 const scales = {'': [0, 2, 4, 5, 7, 9, 11], 'm': [0, 2, 3, 5, 7, 8, 10]};
 const roman_steps = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
-const pitch2note = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭', 'A', 'B♭', 'B']
-const pitch2note_tonal = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
+const pitch2note = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
 
 const mode2mode_tonal = {
   "": "",
@@ -67,7 +69,7 @@ const chordname = function(chord) {
 }
 
 const chordname_tonal = function(chord) {
-  return pitch2note_tonal[chord.base] + mode2mode_tonal[chord.mode];
+  return pitch2note[chord.base] + mode2mode_tonal[chord.mode];
 }
 
 const relative = function(chord, key) {
@@ -163,6 +165,13 @@ const find_patterns = function(chords) {
   return patterns;
 };
 
+const allchords = [];
+for(let base of util.range(12)) {
+  for(let mode of Object.keys(CHORDS)) {
+    allchords.push({base: base, mode: mode})
+  }
+}
+
 const alternatives = {};
 const add_alternative = function(chord, alt) {
   chord[0] = (12+chord[0]) % 12;
@@ -243,17 +252,10 @@ const pianoroll_to_melody = function(pianoroll, shift) {
   return notes.sort((a, b) => (a.start - b.start));
 }
 
-const reharmonize = function(progression, key) {
-  // TODO: delete
-  let tmp = [];
-  for(let i = 0; i < 12; ++i) {
-    tmp.push(nn.eval_notenet({base: 0, mode: ''}, i));
-  }
-  console.log(tmp);
-
+const reharmonize = function(progression) {
   return progression.map(function(oldchord) {
-    // let rel = relative(chord, key);
-    let chord = Object.create(oldchord);
+    let chord = {}
+    Object.assign(chord, oldchord);
     chord.reharmonized = false;
     const newchords = alternatives[[chord.base, chord.mode]];
     if(newchords && Math.random() > 0.5) {
@@ -266,4 +268,100 @@ const reharmonize = function(progression, key) {
   });
 };
 
-export { CHORDS, counttime, chordname, note2pitch, scales, roman, reharmonize, find_patterns, notesequence_to_melody, melody_to_notesequence, pianoroll_to_melody, chordname_tonal };
+tf.loadLayersModel('js/hidden_markov/model.json').then(net => {
+  window.hidden_markov_net = net;
+})
+
+const markov_reharmonize = function(progression, melody, hidden_markov=false, use_grammar=false) {
+  let indices = util.range(progression.length);
+  util.shuffle(indices);
+  console.log(progression);
+  
+  let conditional_prob; // Make conditional_prob escape the if-scope
+  const modes = {"": 0, "7": 1, "maj7": 2, "m": 3, "m7": 4, "o": 5, "o7": 6};
+  if(hidden_markov) {
+    const last_note = melody[melody.length-1];
+    const end  = 8 * Math.ceil((last_note.start + last_note.duration) / 2);
+    let melodies = tf.buffer([end, 12]);
+    for(let note of melody) {
+      const notestart = Math.round(4 * note.start);
+      const noteend   = Math.round(4 * (note.start+note.duration));
+      for(let t = notestart; t < noteend; t++) {
+        melodies.set(1, t, note.pitch%12);
+      }
+    }
+    melodies = melodies.toTensor().reshape([-1, 8, 12]);
+    const chord_probs = hidden_markov_net.predict(melodies).reshape([-1, 12, 7]).arraySync();
+    conditional_prob = (replacement, base) => {
+      if(replacement.mode === "+" || replacement.mode === "ø") // These are not in the model..
+        return 0;
+      const tensor_start = Math.floor(base.start / 2);
+      const tensor_end   = Math.ceil((base.start+base.duration) / 2);
+      let logsum = 0;
+      let logcount = 0;
+      for(let t = tensor_start; t < tensor_end; t++) {
+        const p = chord_probs[t][replacement.base][modes[replacement.mode]];
+        logsum += Math.log(p);
+        logcount += 1;
+      }
+      console.log(`${replacement.base} ${replacement.mode} ${logsum} / ${logcount}`);
+      return Math.exp(logsum / logcount);
+    };
+  }
+
+  return indices.map(function(i) {
+    const oldchord = progression[i];
+    let chord = {}
+    Object.assign(chord, oldchord);
+    chord.reharmonized = false;
+
+    let search_space = allchords;
+    if(use_grammar) {
+      search_space = alternatives[[oldchord.base, oldchord.mode]];
+      if(search_space === undefined)
+        return chord;
+      search_space = search_space.map(([b, m]) => ({base: b, mode: m}));
+      search_space.push(oldchord); // Allow not changing the chord!
+    }
+
+    if(search_space.length == 0 && search_space !== undefined) {
+      return chord;
+    }
+
+    let markov_prob = null;
+    if(i == 0) {
+      const next = chordname(progression[1])
+      markov_prob = (chord => markov.initials[chord] * markov.probs[chordname(chord)][next]);
+    } else if(i == progression.length-1) {
+      const second_last = chordname(progression[progression.length-2])
+      markov_prob = (chord => markov.probs[second_last][chordname(chord)]);
+    } else {
+      const last    = chordname(progression[i-1]);
+      const next    = chordname(progression[i+1]);
+      markov_prob = (chord => markov.probs[last][chordname(chord)] * markov.probs[chordname(chord)][next]);
+    }
+
+    let prob = markov_prob;
+    if(hidden_markov) {
+      prob = (chord => markov_prob(chord) * conditional_prob(chord, progression[i]));
+    }
+    
+    let probabilities = util.normalize(search_space.map(prob));
+    let random = Math.random();
+    let idx = 0;
+    while(random > probabilities[idx]) random -= probabilities[idx++];
+
+    const newchord = search_space[idx];
+    if(chordname(newchord) !== chordname(oldchord)) {
+      chord.reharmonized = true;
+      chord.base = newchord.base
+      chord.mode = newchord.mode;
+      chord.original = oldchord;
+    }
+
+    return chord;
+  }).sort((x, y) => x.start - y.start);
+};
+
+export { CHORDS, counttime, chordname, note2pitch, scales, roman, reharmonize, find_patterns, notesequence_to_melody, melody_to_notesequence, pianoroll_to_melody, chordname_tonal, markov_reharmonize
+};

@@ -11,7 +11,7 @@ var key;
 var scroller;
 var x, xinv, y, duration;
 var height, width;
-var audio_initialized = false;
+
 
 const D = {bass: 35, ride: 51, hat_pedal: 44}
 const beat = [
@@ -24,10 +24,9 @@ const beat = [
 ].map(harmony.counttime())
 
 const init_audio = function() {
-  if(audio_initialized) {
+  if(MIDI.noteOn !== undefined) {
     return;
   }
-  audio_initialized = true;
   MIDI.loadPlugin({
     soundfontUrl: "./soundfont/selection/",
     instruments: [
@@ -43,7 +42,7 @@ const init_audio = function() {
 }
 init_audio();
 
-document.addEventListener("click", init_audio);
+// document.addEventListener("click", init_audio);
 
 const draw_notes = function() {
   d3.select('#notes').remove();
@@ -180,8 +179,18 @@ const text_button = function(base, name, px, py, w, h, id=null) {
   }, id)
 }
 
-window.reharmonize = function() {
-  progression = harmony.reharmonize(original_progression, key);
+window.grammar_reharmonization = function() {
+  progression = harmony.reharmonize(original_progression);
+  draw_chords();
+}
+
+window.markov_reharmonization = function(use_grammar=false) {
+  progression = harmony.markov_reharmonize(original_progression, null, false, use_grammar);
+  draw_chords();
+}
+
+window.hidden_markov_reharmonization = function(use_grammar=false) {
+  progression = harmony.markov_reharmonize(original_progression, melody, true, use_grammar);
   draw_chords();
 }
 
@@ -226,7 +235,7 @@ const draw_buttons = function(play, pause, stop) {
         .attr('transform', `translate(0, ${5*75})`)
       break;
     case 'edit':
-      let num_buttons = 5;
+      let num_buttons = 8;
       button_pane.transition()
         .duration(dur)
         .attr('transform', `translate(${(width-365)/2}, ${height-num_buttons*75})`)
@@ -259,7 +268,7 @@ const draw_buttons = function(play, pause, stop) {
   fa_button(button_pane, 'shuffle', 150, 0, 65, 65, '')
     .on('click', function() {
       window.reharmonize();
-      window.improvise_mvae();
+      window.improvize_mvae();
     });
   fa_button(button_pane, 'play', 225, 0, 65, 65, '')
     .on('click', play);
@@ -277,15 +286,32 @@ const draw_buttons = function(play, pause, stop) {
     draw_chords();
   });
   dy += 75;
-  text_button(edit_pane, 'reharmonise', 0, dy, 365, 65)
-    .on('click', function() { window.reharmonize() });
+  edit_pane.append('text')
+    .text('— Reharmonization —')
+    .attr('x', 365/2)
+    .attr('y', dy+20)
+    .attr('text-anchor', 'middle')
+    .style('font-family', 'Patrick Hand')
+    .style('font-size', '18pt');
+  dy += 35
+  text_button(edit_pane, 'Grammar', 0, dy, 110, 65)
+    .on('click', function() { window.grammar_reharmonization() });
+  text_button(edit_pane, 'Markov', 120, dy, 90, 65)
+    .on('click', function() { window.markov_reharmonization() });
+  text_button(edit_pane, 'Hidden Markov', 220, dy, 145, 65)
+    .style('opacity', 0.5)
+    .on('click', function() { window.hidden_markov_reharmonization() });
+  dy += 75
+  text_button(edit_pane, 'Chord2Vec', 0, dy, 110, 65)
+    .on('click', function() { window.chord2vec_reharmonization() });
+  text_button(edit_pane, 'Gr.Markov', 120, dy, 90, 65, 'grmarkov')
+    .on('click', function() { window.markov_reharmonization(true) });
+  text_button(edit_pane, 'Gr.Hidden Markov', 220, dy, 145, 65)
+    .on('click', function() { window.hidden_markov_reharmonization(true) });
   dy += 75;
-  text_button(edit_pane, 'improvise (MusicVAE)', 0, dy, 365, 65, 'improvise_mvae')
-    .on('click', function() { window.improvise_mvae(); });
+  text_button(edit_pane, 'improvize (MusicVAE)', 0, dy, 365, 65, 'improvize_mvae')
+    .on('click', function() { window.improvize_mvae(); });
   dy += 75;
-  text_button(edit_pane, 'improvise (CNN)', 0, dy, 365, 65, 'improvise_cnn')
-    .on('click', function() { window.improvise_cnn(); });
-  dy = 0;
   for(const el of ['melody', 'harmony', 'bass', 'drums']) {
     const btn = text_button(sound_pane, el, 0, dy, 365, 65)
     btn.on('click', function() {
@@ -312,8 +338,12 @@ const init = function() {
   d3.select('#drawing').select('svg').remove();
   svg = d3.select('#drawing')
     .append('svg')
+    .attr('id', 'svg_canvas')
     .style('height', '100vh')
-    .style('width', '100vw');
+    .style('width', '100vw')
+    .style('position', 'absolute')
+    .style('top', '0')
+    .style('left', '0')
 
   x    = (t => t * 60);
   xinv = (t => t / 60);
@@ -445,8 +475,8 @@ const init = function() {
 };
 
 const handle_resize = function() {
-  width = document.getElementById("drawing").clientWidth;
-  height = document.getElementById("drawing").clientHeight;
+  width = document.getElementById("svg_canvas").clientWidth;
+  height = document.getElementById("svg_canvas").clientHeight;
 
   d3.select("g#buttons")
     .attr("transform", `translate(${(width-365)/2}, ${height-75})`)
@@ -456,7 +486,6 @@ const handle_resize = function() {
 document.addEventListener("DOMContentLoaded", function() {
   handle_resize();
 });
-
 
 const load_song = function(song) {
   fetch(`leadsheets/${song}.ls`)
@@ -607,10 +636,10 @@ hashchanged(window.location.hash);
 const onnx_session = new onnx.InferenceSession('cpu');
 onnx_session.loadModel("./transcoder_huge.onnx").then(() => {
   handle_resize();
-  d3.select('#improvise_cnn > text')
+  d3.select('#improvize_cnn > text')
     .style('fill', 'black');
   console.log('finished loading cnn');
-  window.improvise_cnn = function() {
+  window.improvize_cnn = function() {
     console.log('Improvising using CNN');
     const LATENT = 32;
     let noise = new Tensor(new Float32Array(LATENT).fill(0), "float32", [1, LATENT]);
@@ -655,14 +684,16 @@ onnx_session.loadModel("./transcoder_huge.onnx").then(() => {
   }
 });
 
+
+
 console.log('declaring mvae')
 const mvae = new mm.MusicVAE("https://storage.googleapis.com/magentadata/js/checkpoints/music_vae/mel_chords");
 console.log('done. initializing...')
 mvae.initialize().then(function() {
   console.log('done.')
-  d3.select('#improvise_mvae > text')
+  d3.select('#improvize_mvae > text')
     .style('fill', 'black');
-  window.improvise_mvae = function() {
+  window.improvize_mvae = function() {
     console.log('improvising with MVAE');
     const latent_noise = mm.tf.randomNormal([1, 128], 0, 0.3);
     const recurse = function(start) {
