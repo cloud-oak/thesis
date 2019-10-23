@@ -22,12 +22,12 @@ const tf = mm.tf; // Recycle Magenta's bundled Tensorflow
 
 const D = {bass: 35, ride: 59, hat_pedal: 44}
 const beat = [
-  {notes: [D.ride], duration:1},
-  {notes: [D.ride, D.bass, D.hat_pedal], duration:2/3},
-  {notes: [D.ride], duration:1/3},
-  {notes: [D.ride], duration:1},
-  {notes: [D.ride, D.bass, D.hat_pedal], duration:2/3},
-  {notes: [D.ride], duration:1/3},
+  {notes: [D.ride], duration:24},
+  {notes: [D.ride, D.bass, D.hat_pedal], duration:16},
+  {notes: [D.ride], duration:8},
+  {notes: [D.ride], duration:24},
+  {notes: [D.ride, D.bass, D.hat_pedal], duration:16},
+  {notes: [D.ride], duration:8},
 ].map(harmony.counttime())
 
 window.init_audio = function() {
@@ -60,8 +60,6 @@ window.init_audio = function() {
   });
 }
 init_audio();
-
-// document.addEventListener("click", init_audio);
 
 const draw_notes = function() {
   d3.select('#notes').remove();
@@ -142,11 +140,11 @@ const draw_barlines = function(duration) {
   const select = d3.select('#barlines');
   const barlines = !select.empty() ? select : scroller.append('g').attr('id', 'barlines');
   barlines.selectAll()
-    .data(util.range(Math.ceil(duration / 4)))
+    .data(util.range(Math.ceil(duration / 96)))
     .enter()
     .append('line')
-    .attr('x1', d => x(4*d))
-    .attr('x2', d => x(4*d))
+    .attr('x1', d => x(96*d))
+    .attr('x2', d => x(96*d))
     .attr('y1', y(0))
     .attr('y2', y(96))
     .style('stroke', 'lightgray')
@@ -158,8 +156,7 @@ const draw_voicing = function() {
   const select = d3.select('#voicing');
   const container = !select.empty() ? select : scroller.append('g').attr('id', 'voicing');
   container.selectAll()
-    .data(voicing)
-    .enter()
+    .data(voicing) .enter()
     .append('rect')
       .attr('x', d => x(d.start))
       .attr('y', d => y(d.note))
@@ -167,7 +164,7 @@ const draw_voicing = function() {
       .attr('height', 10)
       .style('stroke', 'white')
       .style('stroke-width', 3)
-      .style('fill', d => (d.channel === 0 ? 'lightgray' : 'gray'));
+      .style('opacity', d => (d.channel === 0 ? 0.2 : 0.4));
 }
 
 const prepare_button = function(base, name, px, py, w, h, symbol, id=null) {
@@ -318,10 +315,12 @@ window.shortest_path_voicing = function() {
 }
 
 window.locked_hands_voicing = function() {
+  console.log('Doing Locked Hands.')
   let m_i = 0;
   let c_i = 0;
   voicing = [];
   while(m_i < melody.length && c_i < progression.length) {
+    console.log(`${m_i} -- ${c_i}`);
     const m = melody[m_i];
     const c = progression[c_i];
 
@@ -329,6 +328,7 @@ window.locked_hands_voicing = function() {
     const c_end = c.start + c.duration;
 
     if(c_end <= m.start) { c_i++; continue; }
+    if(m_end <= c.start) { m_i++; continue; }
 
     const start = Math.max(m.start, c.start);
     const end   = Math.min(m_end, c_end);
@@ -343,8 +343,11 @@ window.locked_hands_voicing = function() {
         channel: 0
       })
     }
-    m_i++;
+
+    if(c_end <= m_end) { c_i++; }
+    if(m_end <= c_end) { m_i++; }
   }
+  draw_voicing();
 }
 
 const draw_buttons = function(play, pause, stop) {
@@ -528,8 +531,8 @@ const init = function() {
     // .style('top', '0')
     // .style('left', '0')
 
-  x    = (t => t * 60);
-  xinv = (t => t / 60);
+  x    = (t => t * 2);
+  xinv = (t => t / 2);
 
   const highest = d3.max(original_melody.map(n => n.note));
   y    = (p => (24+highest - p) * 10);
@@ -551,7 +554,7 @@ const init = function() {
   const gettime = function() {
     return -xinv(scroller.node().transform.baseVal.consolidate().matrix.e);
   };
-  const b2ms     = (beats => 1000 * 60 / bpm * beats);
+  const b2ms     = (ticks => 1000 * 60 / 24 / bpm * ticks);
   const humanize = (ms => ms); //Math.max(0, 30 * (Math.random() - 0.5) + ms));
   const play = function() {
     scroller.interrupt();
@@ -573,7 +576,7 @@ const init = function() {
     let chord_idx = 0;
     while(voicing[chord_idx].start < time) chord_idx++;
     let beat_idx = 0;
-    while(beat[beat_idx].start < (time % 4)) {
+    while(beat[beat_idx].start < (time % 96)) {
       beat_idx++;
     }
     const playnextnote = function() {
@@ -613,7 +616,7 @@ const init = function() {
         MIDI.chordOff(2, chord.notes, b2ms(chord.duration) / 1000);
       }
       beat_idx = (beat_idx + 1) % beat.length;
-      const delay = b2ms((((beat[beat_idx].start - gettime()) % 4) + 4) % 4);
+      const delay = b2ms((((beat[beat_idx].start - gettime()) % 96) + 96) % 96);
       setTimeout(playnextdrums, humanize(delay));
     };
 
@@ -647,14 +650,14 @@ const init = function() {
       }
       else if(keycode === 39) {
         pause()
-        let time = gettime() + 4;
-        time -= time % 4;
+        let time = gettime() + 96;
+        time -= time % 96;
         scroller.attr('transform', `translate(${-x(time)})`);
       }
       else if(keycode === 37) {
         pause()
-        let time = gettime() - 4;
-        time -= time % 4;
+        let time = gettime() - 96;
+        time -= time % 96;
         scroller.attr('transform', `translate(${-x(time)})`);
       }
     });
@@ -697,12 +700,12 @@ const load_song = function(song) {
       chords = chords.replace(/\|/g, '').split(/\s+/).filter(x => x !== '');
       notes = notes.replace(/\|/g, '').split(/\s+/).filter(x => x !== '');
 
-      let default_note = 1, default_chord = 4;
+      let default_note = 24, default_chord = 96;
       for (let h of header.split(' ')) {
         if (h.startsWith('default_note'))
-          default_note = parseFloat(h.split(':')[1]);
+          default_note = Math.round(24 * parseFloat(h.split(':')[1]));
         if (h.startsWith('default_chord'))
-          default_chord = parseFloat(h.split(':')[1]);
+          default_chord = Math.round(24 * parseFloat(h.split(':')[1]));
         if (h.startsWith('bpm'))
           bpm = parseFloat(h.split(':')[1]);
       }
@@ -715,9 +718,9 @@ const load_song = function(song) {
           dur = 0;
         if(length) {
           let [, beats, triplet] = length;
-          if(beats === 'e')         dur = 0.5;
-          else if(beats === 's')    dur = 0.25;
-          else                      dur = +beats;
+          if(beats === 'e')         dur = 12;
+          else if(beats === 's')    dur = 6;
+          else                      dur = 24 * +beats;
           if(triplet === 't')       dur = 2 * dur / 3;
           else if(triplet === '.')  dur = 3 * dur / 2;
         } else {
@@ -740,9 +743,9 @@ const load_song = function(song) {
       original_melody = notes.map(function(n) {
         let [, note, octave, dur, triplet] = n.match(noter);
         if(dur === '')            dur = default_note;
-        else if(dur === 'e')      dur = 0.5;
-        else if(dur === 's')      dur = 0.25;
-        else                      dur = +dur;
+        else if(dur === 'e')      dur = 12;
+        else if(dur === 's')      dur = 6;
+        else                      dur = 24 * +dur;
         if(triplet === 't')       dur = 2 * dur / 3;
         else if(triplet === '.')  dur = 3 * dur / 2;
         if(octave === '')         octave = 1;
