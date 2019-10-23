@@ -16,5 +16,17 @@ const normalize = function(array) {
   return array.map(x => x / sum);
 }
 
+const argmin = function(array, key = (x => x)) {
+  let best_idx = 0;
+  let best_val = key(array[0]);
+  for(let k = 1; k < array.length; k++) {
+    const currentval = key(array[k])
+    if(currentval < best_val) {
+      best_idx = k;
+      best_val = currentval;
+    }
+  }
+  return [array[best_idx], best_val];
+}
 
-export { range, toTitleCase, shuffle, normalize };
+export { range, toTitleCase, shuffle, normalize, argmin };

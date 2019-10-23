@@ -3,7 +3,7 @@
 import * as util from "./util.js";
 import * as harmony from "./harmony.js";
 
-var original_melody, melody, original_progression, progression, scroller, svg, button_pane;
+var original_melody, melody, original_progression, progression, scroller, svg, button_pane, voicing;
 var bpm = 100;
 var playing = false;
 var enabled = {melody:true, harmony:true, bass:true, drums:true};
@@ -11,6 +11,7 @@ var key;
 var scroller;
 var x, xinv, y, duration;
 var height, width;
+var edit_pane_height;
 
 var audio_loaded = false,
     mvae_loaded = false,
@@ -19,7 +20,7 @@ var audio_loaded = false,
 
 const tf = mm.tf; // Recycle Magenta's bundled Tensorflow
 
-const D = {bass: 35, ride: 51, hat_pedal: 44}
+const D = {bass: 35, ride: 59, hat_pedal: 44}
 const beat = [
   {notes: [D.ride], duration:1},
   {notes: [D.ride, D.bass, D.hat_pedal], duration:2/3},
@@ -152,6 +153,23 @@ const draw_barlines = function(duration) {
     .style('stroke-width', '1px');
 }
 
+const draw_voicing = function() {
+  d3.select('#voicing').remove();
+  const select = d3.select('#voicing');
+  const container = !select.empty() ? select : scroller.append('g').attr('id', 'voicing');
+  container.selectAll()
+    .data(voicing)
+    .enter()
+    .append('rect')
+      .attr('x', d => x(d.start))
+      .attr('y', d => y(d.note))
+      .attr('width', d => x(d.duration))
+      .attr('height', 10)
+      .style('stroke', 'white')
+      .style('stroke-width', 3)
+      .style('fill', d => (d.channel === 0 ? 'lightgray' : 'gray'));
+}
+
 const prepare_button = function(base, name, px, py, w, h, symbol, id=null) {
   if(id === null) { id = name };
   const select = d3.select(`#${id}`);
@@ -197,6 +215,28 @@ const text_button = function(base, name, px, py, w, h, id=null) {
   }, id)
 }
 
+const twoline_text_button = function(base, line1, line2, px, py, w, h, id=null) {
+  if(id === null) {
+    id = name;
+  }
+  return prepare_button(base, name, px, py, w, h, x => {
+    x.append('text')
+      .text(line1)
+      .attr('x', w/2)
+      .attr('y', h/2+8-15)
+      .attr('text-anchor', 'middle')
+      .style('font-family', 'Patrick Hand')
+      .style('font-size', '18pt');
+    x.append('text')
+      .text(line2)
+      .attr('x', w/2)
+      .attr('y', h/2+8+15)
+      .attr('text-anchor', 'middle')
+      .style('font-family', 'Patrick Hand')
+      .style('font-size', '18pt');
+  }, id)
+}
+
 window.grammar_reharmonization = function() {
   progression = harmony.reharmonize(original_progression);
   draw_chords();
@@ -210,6 +250,101 @@ window.markov_reharmonization = function(use_grammar=false) {
 window.hidden_markov_reharmonization = function(use_grammar=false) {
   progression = harmony.markov_reharmonize(original_progression, melody, true, use_grammar);
   draw_chords();
+}
+
+window.naive_voicing = function() {
+  voicing = progression.flatMap(chord =>
+    harmony.CHORDS[chord.mode].map(x =>
+      ({start: chord.start, duration: chord.duration, note: (x+chord.base) % 12 + 48, channel: 0})
+    ).concat([
+      ({start: chord.start, duration: chord.duration, note: chord.base + 36, channel: 1})
+    ])
+  );
+  draw_voicing();
+}
+
+window.shortest_path_voicing = function() {
+  const h1 = 1, h2 = 2, h3 = 2;
+  // For some reason a look-up into object[[]] coerces to object['']... Oh Javascript
+  let best_paths = [
+    [[], [], 0] // chord - path - cost
+  ];
+  for(let chord of progression) {
+    const corresponding_melody = melody.filter(m =>
+      (m.start+m.duration >= chord.start &&
+       m.start <= chord.start+chord.duration)
+    ); // I'm O(n) and I don't care :)
+    const lowest_melody_note = d3.min(corresponding_melody.map(x => x.note));
+    const lower_bound = Math.max(lowest_melody_note-20, 30);
+    const upper_bound = lowest_melody_note - 1;
+
+    const pcs = harmony.CHORDS[chord.mode].map(x => (x + chord.base) % 12);
+    
+    let new_best_paths = [];
+    let count = 0;
+    for(let S of harmony.chord_realizations(chord, lower_bound, upper_bound)) {
+      count++;
+      const [[, path, cost], distance] = util.argmin(best_paths, path => 
+        path[2] + harmony.realization_distance(path[0], S));
+      const S_pcs = S.map(s => (s % 12));
+      let penalty = -S[0]/10;
+      if(!S_pcs.includes(pcs[0])) penalty += h1;
+      if(!S_pcs.includes(pcs[1])) penalty += h2;
+      if(!S_pcs.includes(pcs[2])) penalty += h1;
+      if((pcs.length > 3) && (!S_pcs.includes(pcs[2]))) penalty += h2;
+      for(let k = 1; k < S.length; k++) {
+        if(S[k] - S[k-1] <= 2) penalty += h3;
+      }
+
+      new_best_paths.push([S, path.concat([S]), cost + distance + penalty]);
+    }
+    best_paths = new_best_paths;
+  }
+  console.log(best_paths);
+  const [[,best_voicing,], ] = util.argmin(best_paths, path => path[2]);
+
+  voicing = [];
+  for(let i = 0; i < progression.length; i++) {
+    const chord = progression[i];
+    const realization = best_voicing[i];
+    
+    voicing.push({start: chord.start, duration: chord.duration, note: realization[0]-12, channel: 1})
+    for(let note of realization) {
+      voicing.push({start: chord.start, duration: chord.duration, note: note, channel: 0})
+    }
+  }
+
+  draw_voicing();
+}
+
+window.locked_hands_voicing = function() {
+  let m_i = 0;
+  let c_i = 0;
+  voicing = [];
+  while(m_i < melody.length && c_i < progression.length) {
+    const m = melody[m_i];
+    const c = progression[c_i];
+
+    const m_end = m.start + m.duration;
+    const c_end = c.start + c.duration;
+
+    if(c_end <= m.start) { c_i++; continue; }
+
+    const start = Math.max(m.start, c.start);
+    const end   = Math.min(m_end, c_end);
+
+    for(let note of harmony.CHORDS[c.mode]) {
+      note += c.base;
+      while(note < m.note - 12) { note += 12; }
+      voicing.push({
+        start: start,
+        duration: end - start,
+        note: note,
+        channel: 0
+      })
+    }
+    m_i++;
+  }
 }
 
 const draw_buttons = function(play, pause, stop) {
@@ -242,24 +377,25 @@ const draw_buttons = function(play, pause, stop) {
         .attr('transform', `translate(0, 75)`)
       break;
     case 'sound':
+      const sound_slide_amt = 5*75;
       button_pane.transition()
         .duration(dur)
-        .attr('transform', `translate(${(width-365)/2}, ${height-5*75})`)
+        .attr('transform', `translate(${(width-365)/2}, ${height-sound_slide_amt})`)
       sound_pane.transition()
         .duration(dur)
         .attr('transform', `translate(0, 75)`)
       edit_pane.transition()
         .duration(dur)
-        .attr('transform', `translate(0, ${5*75})`)
+        .attr('transform', `translate(0, ${sound_slide_amt+5})`)
       break;
     case 'edit':
-      let num_buttons = 8;
+      const edit_slide_amt = 75+edit_pane_height;
       button_pane.transition()
         .duration(dur)
-        .attr('transform', `translate(${(width-365)/2}, ${height-num_buttons*75})`)
+        .attr('transform', `translate(${(width-365)/2}, ${height-edit_slide_amt})`)
       sound_pane.transition()
         .duration(dur)
-        .attr('transform', `translate(0, ${num_buttons*75})`)
+        .attr('transform', `translate(0, ${edit_slide_amt + 5})`)
       edit_pane.transition()
         .duration(dur)
         .attr('transform', `translate(0, 75)`)
@@ -312,27 +448,53 @@ const draw_buttons = function(play, pause, stop) {
     .style('font-family', 'Patrick Hand')
     .style('font-size', '18pt');
   dy += 35
-  text_button(edit_pane, 'Grammar', 0, dy, 110, 65)
+  text_button(edit_pane, 'Grammar', 0, dy, 105, 65)
     .on('click', function() { window.grammar_reharmonization() });
-  text_button(edit_pane, 'Markov', 120, dy, 90, 65)
+  text_button(edit_pane, 'Markov', 115, dy, 105, 65)
     .on('click', function() { window.markov_reharmonization() });
-  text_button(edit_pane, 'Hidden Markov', 220, dy, 145, 65)
-    .style('opacity', 0.5)
+  text_button(edit_pane, 'Hidden Markov', 230, dy, 135, 65)
     .on('click', function() { window.hidden_markov_reharmonization() });
   dy += 75
-  text_button(edit_pane, 'Chord2Vec', 0, dy, 110, 65)
+  twoline_text_button(edit_pane, 'Grammar +', 'Chord2Vec', 0, dy, 105, 65, 'grchord2vec')
     .on('click', function() { window.chord2vec_reharmonization() });
-  text_button(edit_pane, 'Gr.Markov', 120, dy, 90, 65, 'grmarkov')
+  twoline_text_button(edit_pane, 'Grammar +', 'Markov', 115, dy, 105, 65, 'grmarkov')
     .on('click', function() { window.markov_reharmonization(true) });
-  text_button(edit_pane, 'Gr.Hidden Markov', 220, dy, 145, 65)
+  twoline_text_button(edit_pane, 'Grammar +', 'Hidden Markov', 230, dy, 135, 65, 'grhmarkov')
     .on('click', function() { window.hidden_markov_reharmonization(true) });
   dy += 75;
-  text_button(edit_pane, 'improvise (MusicVAE)', 0, dy, 365, 65, 'improvise_mvae')
+  edit_pane.append('text')
+    .text('— Improvisation —')
+    .attr('x', 365/2)
+    .attr('y', dy+20)
+    .attr('text-anchor', 'middle')
+    .style('font-family', 'Patrick Hand')
+    .style('font-size', '18pt');
+  dy += 35
+  text_button(edit_pane, 'MusicVAE', 0, dy, 178, 65, 'improvise_mvae')
     .on('click', function() { window.improvise_mvae(); });
-  dy += 75;
-  text_button(edit_pane, 'improvise (GAN)', 0, dy, 365, 65, 'improvise_gan')
+  text_button(edit_pane, 'GAN', 188, dy, 177, 65, 'improvise_gan')
     .on('click', function() { window.improvise_gan(); });
   dy += 75;
+  edit_pane.append('text')
+    .text('— Voicing —')
+    .attr('x', 365/2)
+    .attr('y', dy+20)
+    .attr('text-anchor', 'middle')
+    .style('font-family', 'Patrick Hand')
+    .style('font-size', '18pt');
+  dy += 35
+  text_button(edit_pane, 'Naïve Voicing', 0, dy, 130, 65, 'naive_voicing')
+    .on('click', function() { window.naive_voicing(); });
+  text_button(edit_pane, 'Locked Hands', 140, dy, 365-140, 65, 'locked_hands')
+    .on('click', function() { window.locked_hands_voicing(); });
+  dy += 75;
+  text_button(edit_pane, 'Shortest Path', 0, dy, 130, 65, 'shortest_path')
+    .on('click', function() { window.shortest_path_voicing(); });
+  twoline_text_button(edit_pane, 'Shortest Path +', 'Wave Function Collapse', 140, dy, 365-140, 65, 'wfc')
+    .on('click', function() { window.shortest_path_wfc_voicing(); });
+  dy += 75;
+  edit_pane_height = dy;
+  dy = 0;
   for(const el of ['melody', 'harmony', 'bass', 'drums']) {
     const btn = text_button(sound_pane, el, 0, dy, 365, 65)
     btn.on('click', function() {
@@ -390,9 +552,12 @@ const init = function() {
     return -xinv(scroller.node().transform.baseVal.consolidate().matrix.e);
   };
   const b2ms     = (beats => 1000 * 60 / bpm * beats);
-  const humanize = (ms => Math.max(0, 30 * (Math.random() - 0.5) + ms));
+  const humanize = (ms => ms); //Math.max(0, 30 * (Math.random() - 0.5) + ms));
   const play = function() {
     scroller.interrupt();
+    if(voicing === undefined) {
+      naive_voicing(progression);
+    }
     playing = true;
     d3.select("#pause").style("visibility", "visible");
     d3.select("#play").style("visibility", "hidden");
@@ -406,17 +571,17 @@ const init = function() {
     let note_idx  = 0;
     while(melody[note_idx].start < time) note_idx++;
     let chord_idx = 0;
-    while(progression[chord_idx].start < time) chord_idx++;
+    while(voicing[chord_idx].start < time) chord_idx++;
     let beat_idx = 0;
-    while(progression[beat_idx].start < (time % 4)) {
+    while(beat[beat_idx].start < (time % 4)) {
       beat_idx++;
     }
     const playnextnote = function() {
       if(!playing) return;
       const note = melody[note_idx];
       if(enabled.melody) {
-        MIDI.noteOn( 0, note.note+12, 90, 0);
-        MIDI.noteOff(0, note.note+12, b2ms(note.duration) / 1000);
+        MIDI.noteOn( 0, note.note, 90, 0);
+        MIDI.noteOff(0, note.note, b2ms(note.duration) / 1000);
       }
       note_idx++;
       if(note_idx < melody.length) {
@@ -425,26 +590,26 @@ const init = function() {
     };
     const playnextchord = function() {
       if(!playing) return;
-      const chord = progression[chord_idx];
-      const notes = harmony.CHORDS[chord.mode].map(x => x+chord.base+48);
-      if(enabled.bass) {
-        MIDI.noteOn(  1, notes[0]-12, 120, 0);
-        MIDI.noteOff( 1, notes[0]-12, b2ms(chord.duration) / 1000);
+      const now = voicing[chord_idx].start;
+      while(voicing[chord_idx].start == now) {
+        const note = voicing[chord_idx];
+        MIDI.noteOn(note.channel,  note.note, 60, 0);
+        MIDI.noteOff(note.channel, note.note, b2ms(note.duration) / 1000);
+        chord_idx++;
       }
-      if(enabled.harmony) {
-        MIDI.chordOn( 0, notes.slice(1), 60, 0);
-        MIDI.chordOff(0, notes.slice(1), b2ms(chord.duration) / 1000);
-      }
-      chord_idx++;
-      if(chord_idx < progression.length) {
-        setTimeout(playnextchord, humanize(b2ms(progression[chord_idx].start - gettime())));
+      if(chord_idx < voicing.length) {
+        setTimeout(playnextchord, humanize(b2ms(voicing[chord_idx].start - gettime())));
       }
     };
     const playnextdrums = function() {
      if(!playing) return;
-      const chord = beat[beat_idx];
+      const chord  = beat[beat_idx];
+      const noride = chord.notes.filter(n => n != D.ride);
       if(enabled.drums) {
-        MIDI.chordOn( 2, chord.notes, 70, 0);
+        MIDI.noteOn(  2, D.ride, 30, 0);
+        if(noride.length) {
+          MIDI.chordOn( 2, noride, 70, 0);
+        }
         MIDI.chordOff(2, chord.notes, b2ms(chord.duration) / 1000);
       }
       beat_idx = (beat_idx + 1) % beat.length;
@@ -453,7 +618,7 @@ const init = function() {
     };
 
     setTimeout(playnextnote,  b2ms(melody[note_idx].start - time));
-    setTimeout(playnextchord, b2ms(progression[chord_idx].start - time));
+    setTimeout(playnextchord, b2ms(voicing[chord_idx].start - time));
     setTimeout(playnextdrums, b2ms(beat[beat_idx].start - time));
   };
   const stop = function() {
@@ -512,6 +677,8 @@ const load_song = function(song) {
   fetch(`leadsheets/${song}.ls`)
     .then(resp => resp.text())
     .then((data) => {
+      voicing = undefined;
+
       let chrdr = /([ABCDEFG_][#b]?)((?:|7|maj7|m7?|o7?|ø|\+)?)/;
       let lengthr = /:(e|s|\d*\.?\d+)([t.]?)/;
       let noter = /([abcdefg_][#b]?)(\d*):?((?:e|\d*\.?\d+)?)([t.]?)/;
@@ -556,7 +723,6 @@ const load_song = function(song) {
         } else {
           dur = default_chord;
         }
-        console.log(`${length} -> ${dur}`);
         return {base:base, mode:mode, duration:dur, reharmonized:false};
       };
 
@@ -581,7 +747,7 @@ const load_song = function(song) {
         else if(triplet === '.')  dur = 3 * dur / 2;
         if(octave === '')         octave = 1;
         note = harmony.note2pitch[note];
-        if(note !== null) note = +note + 36 + 12 * octave;
+        if(note !== null) note = +note + 48 + 12 * octave;
         return {note:note, duration:dur, changed:false};
       }).map(harmony.counttime())
         .filter(x => x.note !== null);
@@ -669,7 +835,7 @@ tf.loadLayersModel('nets/hidden_markov/model.json').then(net => {
   window.hidden_markov_net = net;
 })
 
-tf.loadLayersModel('nets/gan/model.json').then(net => {
+tf.loadLayersModel('nets/gan_quantized/model.json').then(net => {
   gan_loaded = true;
   if(mvae_loaded && hidden_loaded) {
     d3.select('#loading_networks')
@@ -705,7 +871,6 @@ tf.loadLayersModel('nets/gan/model.json').then(net => {
       }
 
       const input_pianoroll = pianoroll.toTensor().mul(2).sub(1);
-      console.log(input_pianoroll.arraySync());
       const output_pianoroll = net.predict([noise, input_pianoroll]).arraySync()[0]
 
       const pre  = melody.filter(t => t.start < start);

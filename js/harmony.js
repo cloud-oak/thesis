@@ -199,6 +199,38 @@ util.range(12).map(x => {
   add_alternative([x,'o'],    [x+3*Min3, 'o7']);
 });
 
+const realization_distance = function(R, S) {
+  const c = 2;
+  return d3.sum(S.map(s => d3.min(R.map(r => Math.abs(s - r) + (r === s ? 0 : c))) || 0))
+}
+
+const chord_realizations = function*(chord, lower_bound=30, upper_bound=48) {
+  const mods = CHORDS[chord.mode].map(x => (x + chord.base) % 12);
+  for(let first = lower_bound; first < upper_bound; first++) {
+    if(!mods.includes(first % 12)) continue;
+
+    for(let second = first+1; second < upper_bound; second++) {
+    if(!mods.includes(second % 12)) continue;
+      // These are boring: yield [first, second]; // Two-element chords
+
+      for(let third = second+1; third < upper_bound; third++) {
+        if(!mods.includes(third % 12)) continue;
+        yield [first, second, third]; // Three-element chords
+
+        for(let fourth = third+1; fourth < upper_bound; fourth++) {
+        if(!mods.includes(fourth % 12)) continue;
+          yield [first, second, third, fourth] // Four-element chords
+
+          for(let fifth = fourth+1; fifth < upper_bound; fifth++) {
+            if(!mods.includes(fifth % 12)) continue;
+            yield [first, second, third, fourth, fifth] // Five-element chords
+          }
+        }
+      }
+    }
+  }
+}
+
 const melody_to_notesequence = function(melody, shift) {
   const notes = melody.map(function(n) {
     return {
@@ -271,7 +303,6 @@ const reharmonize = function(progression) {
 const markov_reharmonize = function(progression, melody, hidden_markov=false, use_grammar=false) {
   let indices = util.range(progression.length);
   util.shuffle(indices);
-  console.log(progression);
   
   let conditional_prob; // Make conditional_prob escape the if-scope
   const modes = {"": 0, "7": 1, "maj7": 2, "m": 3, "m7": 4, "o": 5, "o7": 6};
@@ -292,7 +323,7 @@ const markov_reharmonize = function(progression, melody, hidden_markov=false, us
       if(replacement.mode === "+" || replacement.mode === "ø") // These are not in the model..
         return 0;
       const tensor_start = Math.floor(base.start / 2);
-      const tensor_end   = Math.ceil((base.start+base.duration) / 2);
+      const tensor_end   = Math.min(Math.ceil((base.start+base.duration) / 2), chord_probs.length);
       let logsum = 0;
       let logcount = 0;
       for(let t = tensor_start; t < tensor_end; t++) {
@@ -300,7 +331,7 @@ const markov_reharmonize = function(progression, melody, hidden_markov=false, us
         logsum += Math.log(p);
         logcount += 1;
       }
-      console.log(`${replacement.base} ${replacement.mode} ${logsum} / ${logcount}`);
+      if(logcount == 0) logcount = 1;
       return Math.exp(logsum / logcount);
     };
   }
@@ -359,5 +390,5 @@ const markov_reharmonize = function(progression, melody, hidden_markov=false, us
   }).sort((x, y) => x.start - y.start);
 };
 
-export { CHORDS, counttime, chordname, note2pitch, scales, roman, reharmonize, find_patterns, notesequence_to_melody, melody_to_notesequence, pianoroll_to_melody, chordname_tonal, markov_reharmonize
+export { CHORDS, counttime, chordname, note2pitch, scales, roman, reharmonize, find_patterns, notesequence_to_melody, melody_to_notesequence, pianoroll_to_melody, chordname_tonal, markov_reharmonize, chord_realizations, realization_distance
 };
