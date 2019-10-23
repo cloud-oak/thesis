@@ -257,7 +257,6 @@ window.naive_voicing = function() {
       ({start: chord.start, duration: chord.duration, note: chord.base + 36, channel: 1})
     ])
   );
-  draw_voicing();
 }
 
 window.shortest_path_voicing = function() {
@@ -310,8 +309,6 @@ window.shortest_path_voicing = function() {
       voicing.push({start: chord.start, duration: chord.duration, note: note, channel: 0})
     }
   }
-
-  draw_voicing();
 }
 
 window.locked_hands_voicing = function() {
@@ -320,7 +317,6 @@ window.locked_hands_voicing = function() {
   let c_i = 0;
   voicing = [];
   while(m_i < melody.length && c_i < progression.length) {
-    console.log(`${m_i} -- ${c_i}`);
     const m = melody[m_i];
     const c = progression[c_i];
 
@@ -347,7 +343,12 @@ window.locked_hands_voicing = function() {
     if(c_end <= m_end) { c_i++; }
     if(m_end <= c_end) { m_i++; }
   }
-  draw_voicing();
+}
+
+window.shortest_path_wfc_voicing = function() {
+  shortest_path_voicing();
+
+
 }
 
 const draw_buttons = function(play, pause, stop) {
@@ -487,14 +488,14 @@ const draw_buttons = function(play, pause, stop) {
     .style('font-size', '18pt');
   dy += 35
   text_button(edit_pane, 'Naïve Voicing', 0, dy, 130, 65, 'naive_voicing')
-    .on('click', function() { window.naive_voicing(); });
+    .on('click', function() { window.naive_voicing(); draw_voicing(); });
   text_button(edit_pane, 'Locked Hands', 140, dy, 365-140, 65, 'locked_hands')
-    .on('click', function() { window.locked_hands_voicing(); });
+    .on('click', function() { window.locked_hands_voicing(); draw_voicing(); });
   dy += 75;
   text_button(edit_pane, 'Shortest Path', 0, dy, 130, 65, 'shortest_path')
-    .on('click', function() { window.shortest_path_voicing(); });
+    .on('click', function() { window.shortest_path_voicing(); draw_voicing(); });
   twoline_text_button(edit_pane, 'Shortest Path +', 'Wave Function Collapse', 140, dy, 365-140, 65, 'wfc')
-    .on('click', function() { window.shortest_path_wfc_voicing(); });
+    .on('click', function() { window.shortest_path_wfc_voicing(); draw_voicing(); });
   dy += 75;
   edit_pane_height = dy;
   dy = 0;
@@ -558,9 +559,6 @@ const init = function() {
   const humanize = (ms => ms); //Math.max(0, 30 * (Math.random() - 0.5) + ms));
   const play = function() {
     scroller.interrupt();
-    if(voicing === undefined) {
-      naive_voicing(progression);
-    }
     playing = true;
     d3.select("#pause").style("visibility", "visible");
     d3.select("#play").style("visibility", "hidden");
@@ -572,13 +570,8 @@ const init = function() {
       .on('end', function() { playing = false });
 
     let note_idx  = 0;
-    while(melody[note_idx].start < time) note_idx++;
     let chord_idx = 0;
-    while(voicing[chord_idx].start < time) chord_idx++;
     let beat_idx = 0;
-    while(beat[beat_idx].start < (time % 96)) {
-      beat_idx++;
-    }
     const playnextnote = function() {
       if(!playing) return;
       const note = melody[note_idx];
@@ -620,8 +613,14 @@ const init = function() {
       setTimeout(playnextdrums, humanize(delay));
     };
 
-    setTimeout(playnextnote,  b2ms(melody[note_idx].start - time));
-    setTimeout(playnextchord, b2ms(voicing[chord_idx].start - time));
+    while(note_idx < melody.length   && melody[note_idx].start < time) note_idx++;
+    while(chord_idx < voicing.length && voicing[chord_idx].start < time) chord_idx++;
+    while(beat[beat_idx].start < (time % 96)) beat_idx++;
+
+    if(note_idx < melody.length)
+      setTimeout(playnextnote,  b2ms(melody[note_idx].start - time));
+    if(chord_idx < voicing.length)
+      setTimeout(playnextchord, b2ms(voicing[chord_idx].start - time));
     setTimeout(playnextdrums, b2ms(beat[beat_idx].start - time));
   };
   const stop = function() {
@@ -680,7 +679,7 @@ const load_song = function(song) {
   fetch(`leadsheets/${song}.ls`)
     .then(resp => resp.text())
     .then((data) => {
-      voicing = undefined;
+      voicing = [];
 
       let chrdr = /([ABCDEFG_][#b]?)((?:|7|maj7|m7?|o7?|ø|\+)?)/;
       let lengthr = /:(e|s|\d*\.?\d+)([t.]?)/;
