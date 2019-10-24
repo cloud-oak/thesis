@@ -2,6 +2,7 @@
 
 import * as util from "./util.js";
 import * as harmony from "./harmony.js";
+import * as wfc from "./wfc.js";
 
 var original_melody, melody, original_progression, progression, scroller, svg, button_pane, voicing;
 var bpm = 100;
@@ -296,7 +297,6 @@ window.shortest_path_voicing = function() {
     }
     best_paths = new_best_paths;
   }
-  console.log(best_paths);
   const [[,best_voicing,], ] = util.argmin(best_paths, path => path[2]);
 
   voicing = [];
@@ -347,8 +347,50 @@ window.locked_hands_voicing = function() {
 
 window.shortest_path_wfc_voicing = function() {
   shortest_path_voicing();
+  const constraints = voicing;
+  voicing = [];
+  let v_idx = 0;
+  while(v_idx < constraints.length) {
+    const root = constraints[v_idx];
+    let tones = [root];
+    while(++v_idx < constraints.length && constraints[v_idx].start === root.start) {
+      tones.push(constraints[v_idx]);
+    }
+    tones.forEach(x => { if(x.channel === 1) voicing.push(x) });
+    tones = tones.filter(x => x.channel !== 1);
+    console.log(tones.map(x => x.note));
+  
+    const T = root.duration;
+    const P = tones.length;
 
+    const pianoroll = wfc.wfc(T / 24, P);
+    console.log(pianoroll);
 
+    let start = 0;
+    let current_voicings = [];
+    for(let p = 0; p < P; p++) {
+      let ison = false;
+      for(let t = 0; t < T; t++) {
+        let noteon = pianoroll[p][t] > 0;
+        if(noteon && (t == 0 || !ison)) {
+          ison = true;
+          start = t;
+        } else if(ison && (!noteon || t == 31)) {
+          ison = false;
+          if(t == T-1) { t++ };
+          console.log(`${p} -- ${root.start + start} -> ${t - start}`)
+          current_voicings.push({
+            note: tones[p].note,
+            start: root.start + start,
+            duration: Math.max(6, t - start),
+            channel: 0
+          });
+        }
+      }
+    }
+    voicing = voicing.concat(current_voicings.sort((a, b) => (a.start - b.start)));
+  }
+  console.log(voicing);
 }
 
 const draw_buttons = function(play, pause, stop) {

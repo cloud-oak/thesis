@@ -29,4 +29,17 @@ const argmin = function(array, key = (x => x)) {
   return [array[best_idx], best_val];
 }
 
-export { range, toTitleCase, shuffle, normalize, argmin };
+const stringified_unique = function(array) {
+  let s = new Set();
+  let unique = [];
+  for(let el of array) {
+    const str = JSON.stringify(el);
+    if(!s.has(str)) {
+      s.add(str);
+      unique.push(el);
+    }
+  }
+  return unique;
+}
+
+export { range, toTitleCase, shuffle, normalize, argmin, stringified_unique };
