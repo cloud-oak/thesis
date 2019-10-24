@@ -835,7 +835,7 @@ tf.loadLayersModel('nets/hidden_markov/model.json').then(net => {
     }
   }
   window.hidden_markov_net = net;
-})
+});
 
 tf.loadLayersModel('nets/gan_quantized/model.json').then(net => {
   gan_loaded = true;
@@ -863,11 +863,11 @@ tf.loadLayersModel('nets/gan_quantized/model.json').then(net => {
         if(note.note === undefined) {
           continue;
         }
-        let s = Math.floor(4 * (note.start - start));
-        let e = Math.floor(4 * (note.start + note.duration - start));
+        let s = Math.floor((note.start - start) / 6);
+        let e = Math.floor((note.start + note.duration - start) / 6);
         if(e >= 0 || s < 32) {
           for(let i = Math.max(0, s); i < Math.min(32, e); i++) {
-            pianoroll.set(1, 0, i, note.note - 36);
+            pianoroll.set(1, 0, i, note.note - 48);
           }
         }
       }
@@ -876,16 +876,18 @@ tf.loadLayersModel('nets/gan_quantized/model.json').then(net => {
       const output_pianoroll = net.predict([noise, input_pianoroll]).arraySync()[0]
 
       const pre  = melody.filter(t => t.start < start);
-      const post = melody.filter(t => t.start >= start+8);
+      const post = melody.filter(t => t.start >= start+192);
       const newnotes = harmony.pianoroll_to_melody(output_pianoroll, start);
       melody = pre.concat(newnotes).concat(post);
       window.melody = melody;
       draw_notes();
-      if(start + 8 < duration) {
-        recurse(start + 8);
+      if(start + 192 < duration) {
+        recurse(start + 192);
       }
     }
-    recurse(4);
+    // Start improvising when the first chord is played
+    const recursion_start = progression[0].start;
+    recurse(recursion_start);
   }
 });
 
@@ -909,11 +911,11 @@ mvae.initialize().then(function() {
     const latent_noise = mm.tf.randomNormal([1, 128], 0, 0.3);
     const recurse = function(start) {
       const filter_and_crop = seq => seq
-        .filter(t => t.start+t.duration >= start || t.start <= start+8)
+        .filter(t => t.start+t.duration >= start || t.start <= start+192)
         .map(t => {
           let t2 = Object.create(t);
           if(t2.start < start) t2.start = start;
-          if(t2.start + t2.duration < start+8) t2.duration = start+8 - t2.duration;
+          if(t2.start + t2.duration < start+192) t2.duration = start+192 - t2.duration;
           return t2
         });
 
@@ -924,13 +926,14 @@ mvae.initialize().then(function() {
       let chord_progression = new Array(8).fill(mm.constants.NO_CHORD);
       let chord_progression_orig = new Array(8).fill(mm.constants.NO_CHORD);
       for(let beat = 0; beat < 8; ++beat) {
+        const ticks = 24 * beat;
         for(let c of chords_orig) {
-          if(c.start <= beat+start && c.start+c.duration > beat+start) {
+          if(c.start <= ticks+start && c.start+c.duration > ticks+start) {
             chord_progression_orig[beat] = harmony.chordname_tonal(c);
           }
         }
         for(let c of chords) {
-          if(c.start <= beat+start && c.start+c.duration > beat+start) {
+          if(c.start <= ticks+start && c.start+c.duration > ticks+start) {
             chord_progression[beat] = harmony.chordname_tonal(c);
           }
         }
@@ -942,17 +945,19 @@ mvae.initialize().then(function() {
         latent = mm.tf.add(latent, latent_noise);
         mvae.decode(latent, null, chord_progression).then(function(res) {
           const pre  = melody.filter(t => t.start < start);
-          const post = melody.filter(t => t.start >= start+8);
+          const post = melody.filter(t => t.start >= start+192);
           const newnotes = harmony.notesequence_to_melody(res[0], start);
           melody = pre.concat(newnotes).concat(post);
           window.melody = melody;
           draw_notes();
-          if(start + 8 < duration) {
-            recurse(start + 8);
+          if(start + 192 < duration) {
+            recurse(start + 192);
           }
         });
       });
     }
-    recurse(4);
+    // Start improvising when the first chord is played
+    const recursion_start = progression[0].start;
+    recurse(recursion_start);
   }
 });

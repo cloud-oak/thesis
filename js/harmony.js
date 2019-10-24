@@ -235,8 +235,8 @@ const melody_to_notesequence = function(melody, shift) {
   const notes = melody.map(function(n) {
     return {
       pitch: n.note,
-      quantizedStartStep: Math.round(4*(n.start+shift)),
-      quantizedEndStep: Math.round(4*(n.start+shift+n.duration))
+      quantizedStartStep: Math.round((n.start+shift) / 6),
+      quantizedEndStep: Math.round((n.start+shift+n.duration) / 6)
     }
   });
   const totalQuantizedSteps = d3.max(notes => n.quantizedEndStep);
@@ -252,8 +252,8 @@ const notesequence_to_melody = function(notesequence, shift) {
   return notesequence.notes.map(function(n) {
     return {
       note: n.pitch,
-      start: n.quantizedStartStep / 4 + shift,
-      duration: (n.quantizedEndStep - n.quantizedStartStep) / 4,
+      start: n.quantizedStartStep * 6 + shift,
+      duration: (n.quantizedEndStep - n.quantizedStartStep) * 6,
       changed: true
     }
   })
@@ -273,9 +273,9 @@ const pianoroll_to_melody = function(pianoroll, shift) {
         ison = false;
         if(t == 31) { t++ };
         notes.push({
-          note: p + 36,
-          start: shift + start / 4,
-          duration: (t - start) / 4,
+          note: p + 48,
+          start: shift + start * 6,
+          duration: (t - start) * 6,
           changed: true
         });
       }
