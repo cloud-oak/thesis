@@ -17,13 +17,21 @@ const normalize = function(array) {
 }
 
 const argmin = function(array, key = (x => x)) {
+  // Random argmin
   let best_idx = 0;
   let best_val = key(array[0]);
+  let argmins_found = 0;
   for(let k = 1; k < array.length; k++) {
     const currentval = key(array[k])
-    if(currentval < best_val) {
+    if(currentval === best_val) {
+      argmins_found++;
+      if(Math.random() > (argmins_found / (argmins_found + 1))) {
+        best_idx = k;
+      }
+    } else if(currentval < best_val) {
       best_idx = k;
       best_val = currentval;
+      argmins_found = 0;
     }
   }
   return [array[best_idx], best_val];

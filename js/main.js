@@ -312,10 +312,20 @@ window.shortest_path_voicing = function() {
 }
 
 window.locked_hands_voicing = function() {
-  console.log('Doing Locked Hands.')
   let m_i = 0;
   let c_i = 0;
   voicing = [];
+  {
+    const new_p = progression[c_i];
+    if(new_p !== undefined) {
+      voicing.push({
+        start: new_p.start,
+        duration: new_p.duration,
+        note: new_p.base + 36,
+        channel: 1
+      });
+    }
+  };
   while(m_i < melody.length && c_i < progression.length) {
     const m = melody[m_i];
     const c = progression[c_i];
@@ -323,7 +333,19 @@ window.locked_hands_voicing = function() {
     const m_end = m.start + m.duration;
     const c_end = c.start + c.duration;
 
-    if(c_end <= m.start) { c_i++; continue; }
+    if(c_end <= m.start) {
+      c_i++;
+      const new_p = progression[c_i];
+      if(new_p !== undefined) {
+        voicing.push({
+          start: new_p.start,
+          duration: new_p.duration,
+          note: new_p.base + 36,
+          channel: 1
+        });
+      }
+      continue;
+    }
     if(m_end <= c.start) { m_i++; continue; }
 
     const start = Math.max(m.start, c.start);
@@ -337,12 +359,24 @@ window.locked_hands_voicing = function() {
         duration: end - start,
         note: note,
         channel: 0
-      })
+      });
     }
 
-    if(c_end <= m_end) { c_i++; }
+    if(c_end <= m_end) {
+      c_i++;
+      const new_p = progression[c_i];
+      if(new_p !== undefined) {
+        voicing.push({
+          start: new_p.start,
+          duration: new_p.duration,
+          note: new_p.base + 36,
+          channel: 1
+        });
+      }
+    }
     if(m_end <= c_end) { m_i++; }
   }
+  console.log(voicing);
 }
 
 window.shortest_path_wfc_voicing = function() {
@@ -350,6 +384,7 @@ window.shortest_path_wfc_voicing = function() {
   const constraints = voicing;
   voicing = [];
   let v_idx = 0;
+  let cache = {};
   while(v_idx < constraints.length) {
     const root = constraints[v_idx];
     let tones = [root];
@@ -358,12 +393,17 @@ window.shortest_path_wfc_voicing = function() {
     }
     tones.forEach(x => { if(x.channel === 1) voicing.push(x) });
     tones = tones.filter(x => x.channel !== 1);
-    console.log(tones.map(x => x.note));
   
     const T = root.duration;
+    const Tq = root.duration / 24;
     const P = tones.length;
 
-    const pianoroll = wfc.wfc(T / 24, P);
+    let pianoroll = cache[[T, P]];
+    if(pianoroll === undefined) {
+      console.log('Calling WFC');
+      pianoroll = wfc.wfc(Tq, P);
+      cache[[T, P]] = pianoroll;
+    }
     console.log(pianoroll);
 
     let start = 0;
@@ -378,7 +418,6 @@ window.shortest_path_wfc_voicing = function() {
         } else if(ison && (!noteon || t == 31)) {
           ison = false;
           if(t == T-1) { t++ };
-          console.log(`${p} -- ${root.start + start} -> ${t - start}`)
           current_voicings.push({
             note: tones[p].note,
             start: root.start + start,
@@ -465,10 +504,15 @@ const draw_buttons = function(play, pause, stop) {
         pane_shown = 'edit';
       slide_panes();
   });
-  fa_button(button_pane, 'shuffle', 150, 0, 65, 65, '')
+  fa_button(button_pane, 'magic', 150, 0, 65, 65, '')
     .on('click', function() {
-      window.reharmonize();
-      window.improvise_mvae();
+      // Magic mode: Markov+Grammar -> VAE -> Locked Hands
+      window.markov_reharmonization(true);
+      draw_chords();
+      window.improvise_mvae().then(() => {
+        window.naive_voicing();
+        draw_voicing();
+      });
     });
   fa_button(button_pane, 'play', 225, 0, 65, 65, '')
     .on('click', play);
@@ -631,7 +675,7 @@ const init = function() {
       const now = voicing[chord_idx].start;
       while(voicing[chord_idx].start == now) {
         const note = voicing[chord_idx];
-        MIDI.noteOn(note.channel,  note.note, 60, 0);
+        MIDI.noteOn(note.channel,  note.note, note.channel === 1 ? 80 : 50, 0);
         MIDI.noteOff(note.channel, note.note, b2ms(note.duration) / 1000);
         chord_idx++;
       }
@@ -948,17 +992,17 @@ mvae.initialize().then(function() {
         .remove();
     }
   }
-  window.improvise_mvae = function() {
+  window.improvise_mvae = async function() {
     console.log('improvising with MVAE');
     const latent_noise = mm.tf.randomNormal([1, 128], 0, 0.3);
-    const recurse = function(start) {
+    const recurse = async function(start) {
       const filter_and_crop = seq => seq
-        .filter(t => t.start+t.duration >= start || t.start <= start+192)
+        .filter(t => t.start+t.duration >= start && t.start < start+192)
         .map(t => {
           let t2 = Object.create(t);
           if(t2.start < start) t2.start = start;
           if(t2.start + t2.duration < start+192) t2.duration = start+192 - t2.duration;
-          return t2
+          return t2;
         });
 
       const chords      = filter_and_crop(progression);
@@ -982,24 +1026,21 @@ mvae.initialize().then(function() {
       }
 
       const notesequence = harmony.melody_to_notesequence(submelody, -start);
-      mvae.encode([notesequence], chord_progression_orig).then(function(latent) {
-        // Perturb latent code
-        latent = mm.tf.add(latent, latent_noise);
-        mvae.decode(latent, null, chord_progression).then(function(res) {
-          const pre  = melody.filter(t => t.start < start);
-          const post = melody.filter(t => t.start >= start+192);
-          const newnotes = harmony.notesequence_to_melody(res[0], start);
-          melody = pre.concat(newnotes).concat(post);
-          window.melody = melody;
-          draw_notes();
-          if(start + 192 < duration) {
-            recurse(start + 192);
-          }
-        });
-      });
+      let latent = await mvae.encode([notesequence], chord_progression_orig)
+      latent = mm.tf.add(latent, latent_noise);
+      const res = await mvae.decode(latent, null, chord_progression)
+      const pre  = melody.filter(t => t.start < start);
+      const post = melody.filter(t => t.start >= start+192);
+      const newnotes = harmony.notesequence_to_melody(res[0], start);
+      melody = pre.concat(newnotes).concat(post);
+      window.melody = melody;
+      draw_notes();
+      if(start + 192 < duration) {
+        await recurse(start + 192);
+      }
     }
     // Start improvising when the first chord is played
     const recursion_start = progression[0].start;
-    recurse(recursion_start);
+    await recurse(recursion_start);
   }
 });
