@@ -258,6 +258,7 @@ window.naive_voicing = function() {
       ({start: chord.start, duration: chord.duration, note: chord.base + 36, channel: 1})
     ])
   );
+  console.log(voicing);
 }
 
 window.shortest_path_voicing = function() {
@@ -304,7 +305,7 @@ window.shortest_path_voicing = function() {
     const chord = progression[i];
     const realization = best_voicing[i];
     
-    voicing.push({start: chord.start, duration: chord.duration, note: realization[0]-12, channel: 1})
+    voicing.push({start: chord.start, duration: chord.duration, note: chord.base + 36, channel: 1})
     for(let note of realization) {
       voicing.push({start: chord.start, duration: chord.duration, note: note, channel: 0})
     }
@@ -488,13 +489,14 @@ const draw_buttons = function(play, pause, stop) {
     }
   }
 
-  fa_button(button_pane, 'sound', 0, 0, 65, 65, '')
+  fa_button(button_pane, 'reset', 0, 0, 65, 65, '')
     .on('click', function() {
-      if(pane_shown == 'sound')
-        pane_shown = 'none';
-      else
-        pane_shown = 'sound';
-      slide_panes();
+      progression = original_progression;
+      melody = original_melody;
+      voicing = [];
+      draw_notes();
+      draw_chords();
+      draw_voicing();
   });
   fa_button(button_pane, 'edit', 75, 0, 65, 65, '')
     .on('click', function() {
@@ -523,13 +525,6 @@ const draw_buttons = function(play, pause, stop) {
   d3.select('#pause').style('visibility', 'hidden');
 
   let dy = 0;
-  text_button(edit_pane, 'original', 0, dy, 365, 65).on('click', function() {
-    progression = original_progression;
-    melody = original_melody;
-    draw_notes();
-    draw_chords();
-  });
-  dy += 75;
   edit_pane.append('text')
     .text('— Reharmonization —')
     .attr('x', 365/2)
@@ -675,7 +670,8 @@ const init = function() {
       const now = voicing[chord_idx].start;
       while(voicing[chord_idx].start == now) {
         const note = voicing[chord_idx];
-        MIDI.noteOn(note.channel,  note.note, note.channel === 1 ? 80 : 50, 0);
+        // Even though MIDI.js seems to ignore the gain...
+        MIDI.noteOn(note.channel,  note.note, note.channel === 1 ? 80 : 30, 0);
         MIDI.noteOff(note.channel, note.note, b2ms(note.duration) / 1000);
         chord_idx++;
       }
