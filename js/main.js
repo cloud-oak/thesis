@@ -7,7 +7,6 @@ import * as wfc from "./wfc.js";
 var original_melody, melody, original_progression, progression, scroller, svg, button_pane, voicing;
 var bpm = 100;
 var playing = false;
-var enabled = {melody:true, harmony:true, bass:true, drums:true};
 var key;
 var scroller;
 var x, xinv, y, duration;
@@ -440,11 +439,16 @@ const draw_buttons = function(play, pause, stop) {
 
   button_pane.attr('transform', 'translate(10, 70)');
 
-  const sound_pane = button_pane.append('g')
-    .attr('transform', 'translate(0,75)')
+  button_pane.append('rect')
+    .attr('x', -10)
+    .attr('y', -10)
+    .attr('width', 385)
+    .attr('height', 1000)
+    .style('fill', 'white')
+    .style('opacity', 0.7);
 
   const edit_pane = button_pane.append('g')
-    .attr('transform', 'translate(0,75)')
+    .attr('transform', 'translate(0,75)');
 
   let pane_shown = 'none';
 
@@ -454,34 +458,16 @@ const draw_buttons = function(play, pause, stop) {
     case 'none':
       button_pane.transition()
         .duration(dur)
-        .attr('transform', `translate(${(width-365)/2}, ${height-75})`)
-      sound_pane.transition()
-        .duration(dur)
-        .attr('transform', `translate(0, 75)`)
+        .attr('transform', `translate(${(width-365)/2}, ${height-75})`);
       edit_pane.transition()
         .duration(dur)
-        .attr('transform', `translate(0, 75)`)
-      break;
-    case 'sound':
-      const sound_slide_amt = 5*75;
-      button_pane.transition()
-        .duration(dur)
-        .attr('transform', `translate(${(width-365)/2}, ${height-sound_slide_amt})`)
-      sound_pane.transition()
-        .duration(dur)
-        .attr('transform', `translate(0, 75)`)
-      edit_pane.transition()
-        .duration(dur)
-        .attr('transform', `translate(0, ${sound_slide_amt+5})`)
+        .attr('transform', `translate(0, 75)`);
       break;
     case 'edit':
       const edit_slide_amt = 75+edit_pane_height;
       button_pane.transition()
         .duration(dur)
         .attr('transform', `translate(${(width-365)/2}, ${height-edit_slide_amt})`)
-      sound_pane.transition()
-        .duration(dur)
-        .attr('transform', `translate(0, ${edit_slide_amt + 5})`)
       edit_pane.transition()
         .duration(dur)
         .attr('transform', `translate(0, 75)`)
@@ -579,18 +565,6 @@ const draw_buttons = function(play, pause, stop) {
     .on('click', function() { window.shortest_path_wfc_voicing(); draw_voicing(); });
   dy += 75;
   edit_pane_height = dy;
-  dy = 0;
-  for(const el of ['melody', 'harmony', 'bass', 'drums']) {
-    const btn = text_button(sound_pane, el, 0, dy, 365, 65)
-    btn.on('click', function() {
-      enabled[el] = !enabled[el];
-      if(enabled[el])
-        btn.style('fill', 'rgba(255,255,255,0.01)');
-      else
-        btn.style('fill', 'rgba(255,255,255,0.5)');
-    });
-    dy += 75;
-  }
 }
 
 // Initialize...
@@ -656,10 +630,8 @@ const init = function() {
     const playnextnote = function() {
       if(!playing) return;
       const note = melody[note_idx];
-      if(enabled.melody) {
-        MIDI.noteOn( 0, note.note, 90, 0);
-        MIDI.noteOff(0, note.note, b2ms(note.duration) / 1000);
-      }
+      MIDI.noteOn( 0, note.note, 90, 0);
+      MIDI.noteOff(0, note.note, b2ms(note.duration) / 1000);
       note_idx++;
       if(note_idx < melody.length) {
         setTimeout(playnextnote, humanize(b2ms(melody[note_idx].start - gettime())));
@@ -683,13 +655,11 @@ const init = function() {
      if(!playing) return;
       const chord  = beat[beat_idx];
       const noride = chord.notes.filter(n => n != D.ride);
-      if(enabled.drums) {
-        MIDI.noteOn(  2, D.ride, 30, 0);
-        if(noride.length) {
-          MIDI.chordOn( 2, noride, 70, 0);
-        }
-        MIDI.chordOff(2, chord.notes, b2ms(chord.duration) / 1000);
+      MIDI.noteOn(  2, D.ride, 30, 0);
+      if(noride.length) {
+        MIDI.chordOn( 2, noride, 70, 0);
       }
+      MIDI.chordOff(2, chord.notes, b2ms(chord.duration) / 1000);
       beat_idx = (beat_idx + 1) % beat.length;
       const delay = b2ms((((beat[beat_idx].start - gettime()) % 96) + 96) % 96);
       setTimeout(playnextdrums, humanize(delay));
