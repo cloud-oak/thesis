@@ -548,12 +548,15 @@ const draw_buttons = function(play, pause, stop) {
 
       for(let [methodname, method] of methods) {
         for(let i = 0; i < runs_each; i++) {
+          const tic = new Date();
           method();
-          runs.push([[
-            methodname,
-            original_progression,
-            progression
-          ]])
+          const toc = new Date();
+          runs.push([{
+            method: methodname,
+            time: toc - tic,
+            original: original_progression,
+            reharmonized: progression
+          }])
         }
       }
 
@@ -568,10 +571,34 @@ const draw_buttons = function(play, pause, stop) {
     .style('font-family', 'Patrick Hand')
     .style('font-size', '18pt');
   dy += 35
-  text_button(edit_pane, 'MusicVAE', 0, dy, 178, 65, 'improvise_mvae')
-    .on('click', function() { window.improvise_mvae(); });
-  text_button(edit_pane, 'GAN', 188, dy, 177, 65, 'improvise_gan')
-    .on('click', function() { window.improvise_gan(); });
+  text_button(edit_pane, 'Benchmark Improvisations', 0, dy, 365, 65)
+    .on('click', async function() {
+      const runs_each = 20;
+      const methods = [
+        ['MusicVAE0.1', () => window.improvise_mvae(0.1)],
+        ['MusicVAE0.3', () => window.improvise_mvae()],
+        ['MusicVAE0.6', () => window.improvise_mvae(0.6)],
+        ['GAN', () => window.improvise_gan()],
+      ];
+
+      let runs = [];
+
+      for(let [methodname, method] of methods) {
+        for(let i = 0; i < runs_each; i++) {
+          const tic = new Date();
+          await method();
+          const toc = new Date();
+          runs.push([{
+            method: methodname,
+            time: toc - tic,
+            original: original_melody,
+            improvised: melody
+          }])
+        }
+      }
+
+      download('improvisations.json', JSON.stringify(runs));
+    });
   dy += 75;
   edit_pane.append('text')
     .text('— Voicing —')
@@ -983,9 +1010,9 @@ mvae.initialize().then(function() {
         .remove();
     }
   }
-  window.improvise_mvae = async function() {
+  window.improvise_mvae = async function(eps=0.3) {
     console.log('improvising with MVAE');
-    const latent_noise = mm.tf.randomNormal([1, 128], 0, 0.3);
+    const latent_noise = mm.tf.randomNormal([1, 128], 0, eps);
     const recurse = async function(start) {
       const filter_and_crop = seq => seq
         .filter(t => t.start+t.duration >= start && t.start < start+192)
