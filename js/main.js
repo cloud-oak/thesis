@@ -533,8 +533,11 @@ const draw_buttons = function(play, pause, stop) {
     .style('font-size', '18pt');
   dy += 35
   text_button(edit_pane, 'Benchmark Reharmonizations', 0, dy, 365, 65)
-    .on('click', function() {
-      const runs_each = 1;
+    .on('click', async function() {
+      const songs = ['autumn_leaves', 'body_and_soul', 'giant_steps', 'let_it_be',
+        'my_foolish_heart', 'my_way', 'what_a_wonderful_world'];
+
+      const runs_each = 20;
       const methods = [
         ['Grammar', () => window.grammar_reharmonization()],
         ['Markov', () => window.markov_reharmonization()],
@@ -546,17 +549,23 @@ const draw_buttons = function(play, pause, stop) {
 
       let runs = [];
 
-      for(let [methodname, method] of methods) {
-        for(let i = 0; i < runs_each; i++) {
-          const tic = new Date();
-          method();
-          const toc = new Date();
-          runs.push([{
-            method: methodname,
-            time: toc - tic,
-            original: original_progression,
-            reharmonized: progression
-          }])
+      for(let song of songs) {
+        console.log(`Benchmarking on ${song}`);
+        await load_song(song);
+        for(let [methodname, method] of methods) {
+          for(let i = 0; i < runs_each; i++) {
+            const tic = new Date();
+            method();
+            const toc = new Date();
+            runs.push({
+              song: song,
+              method: methodname,
+              time: toc - tic,
+              original: original_progression,
+              reharmonized: progression,
+              melody: melody
+            })
+          }
         }
       }
 
@@ -588,12 +597,13 @@ const draw_buttons = function(play, pause, stop) {
           const tic = new Date();
           await method();
           const toc = new Date();
-          runs.push([{
+          runs.push({
             method: methodname,
             time: toc - tic,
             original: original_melody,
-            improvised: melody
-          }])
+            improvised: melody,
+            chords: progression
+          })
         }
       }
 
