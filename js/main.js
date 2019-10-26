@@ -727,87 +727,85 @@ document.addEventListener("DOMContentLoaded", function() {
   handle_resize();
 });
 
-const load_song = function(song) {
-  fetch(`leadsheets/${song}.ls`)
-    .then(resp => resp.text())
-    .then((data) => {
-      voicing = [];
+const load_song = async function(song) {
+  const resp = await fetch(`leadsheets/${song}.ls`);
+  const data = await resp.text();
+  voicing = [];
 
-      let chrdr = /([ABCDEFG_][#b]?)((?:|7|maj7|m7?|o7?|ø|\+)?)/;
-      let lengthr = /:(e|s|\d*\.?\d+)([t.]?)/;
-      let noter = /([abcdefg_][#b]?)(\d*):?((?:e|\d*\.?\d+)?)([t.]?)/;
+  let chrdr = /([ABCDEFG_][#b]?)((?:|7|maj7|m7?|o7?|ø|\+)?)/;
+  let lengthr = /:(e|s|\d*\.?\d+)([t.]?)/;
+  let noter = /([abcdefg_][#b]?)(\d*):?((?:e|\d*\.?\d+)?)([t.]?)/;
 
-      let lines = data
-        .split('\n')
-        .filter(line => (line !== '') & (line[0] !== '#'));
-      let header = lines[0];
-      let chords = "";
-      let notes = "";
-      for (let [i, line] of lines.entries()) {
-        if (i === 0) continue;
-        if (i % 2 === 0) notes += " " + line;
-        else chords += " " + line;
-      }
-      chords = chords.replace(/\|/g, '').split(/\s+/).filter(x => x !== '');
-      notes = notes.replace(/\|/g, '').split(/\s+/).filter(x => x !== '');
+  let lines = data
+    .split('\n')
+    .filter(line => (line !== '') & (line[0] !== '#'));
+  let header = lines[0];
+  let chords = "";
+  let notes = "";
+  for (let [i, line] of lines.entries()) {
+    if (i === 0) continue;
+    if (i % 2 === 0) notes += " " + line;
+    else chords += " " + line;
+  }
+  chords = chords.replace(/\|/g, '').split(/\s+/).filter(x => x !== '');
+  notes = notes.replace(/\|/g, '').split(/\s+/).filter(x => x !== '');
 
-      let default_note = 24, default_chord = 96;
-      for (let h of header.split(' ')) {
-        if (h.startsWith('default_note'))
-          default_note = Math.round(24 * parseFloat(h.split(':')[1]));
-        if (h.startsWith('default_chord'))
-          default_chord = Math.round(24 * parseFloat(h.split(':')[1]));
-        if (h.startsWith('bpm'))
-          bpm = parseFloat(h.split(':')[1]);
-      }
+  let default_note = 24, default_chord = 96;
+  for (let h of header.split(' ')) {
+    if (h.startsWith('default_note'))
+      default_note = Math.round(24 * parseFloat(h.split(':')[1]));
+    if (h.startsWith('default_chord'))
+      default_chord = Math.round(24 * parseFloat(h.split(':')[1]));
+    if (h.startsWith('bpm'))
+      bpm = parseFloat(h.split(':')[1]);
+  }
 
-      let parse_chord = function(chord) {
-        let [, base, mode] = chord.match(chrdr);
-        base = harmony.note2pitch[base.toLowerCase()];
+  let parse_chord = function(chord) {
+    let [, base, mode] = chord.match(chrdr);
+    base = harmony.note2pitch[base.toLowerCase()];
 
-        let length = chord.match(lengthr),
-          dur = 0;
-        if(length) {
-          let [, beats, triplet] = length;
-          if(beats === 'e')         dur = 12;
-          else if(beats === 's')    dur = 6;
-          else                      dur = 24 * +beats;
-          if(triplet === 't')       dur = 2 * dur / 3;
-          else if(triplet === '.')  dur = 3 * dur / 2;
-        } else {
-          dur = default_chord;
-        }
-        return {base:base, mode:mode, duration:dur, reharmonized:false};
-      };
+    let length = chord.match(lengthr),
+      dur = 0;
+    if(length) {
+      let [, beats, triplet] = length;
+      if(beats === 'e')         dur = 12;
+      else if(beats === 's')    dur = 6;
+      else                      dur = 24 * +beats;
+      if(triplet === 't')       dur = 2 * dur / 3;
+      else if(triplet === '.')  dur = 3 * dur / 2;
+    } else {
+      dur = default_chord;
+    }
+    return {base:base, mode:mode, duration:dur, reharmonized:false};
+  };
 
-      key = parse_chord(header.split(' ')[1]);
-      const scale = harmony.scales[key.mode].map(s => (12 + s + key.base) % 12);
+  key = parse_chord(header.split(' ')[1]);
+  const scale = harmony.scales[key.mode].map(s => (12 + s + key.base) % 12);
 
-      // Process chords
-      let start = 0;
-      original_progression = chords
-        .map(parse_chord)
-        .map(harmony.counttime())
-        .filter(x => x.base !== null && x.base !== undefined);
+  // Process chords
+  let start = 0;
+  original_progression = chords
+    .map(parse_chord)
+    .map(harmony.counttime())
+    .filter(x => x.base !== null && x.base !== undefined);
 
-      start = 0;
-      original_melody = notes.map(function(n) {
-        let [, note, octave, dur, triplet] = n.match(noter);
-        if(dur === '')            dur = default_note;
-        else if(dur === 'e')      dur = 12;
-        else if(dur === 's')      dur = 6;
-        else                      dur = 24 * +dur;
-        if(triplet === 't')       dur = 2 * dur / 3;
-        else if(triplet === '.')  dur = 3 * dur / 2;
-        if(octave === '')         octave = 1;
-        note = harmony.note2pitch[note];
-        if(note !== null) note = +note + 48 + 12 * octave;
-        return {note:note, duration:dur, changed:false};
-      }).map(harmony.counttime())
-        .filter(x => x.note !== null);
+  start = 0;
+  original_melody = notes.map(function(n) {
+    let [, note, octave, dur, triplet] = n.match(noter);
+    if(dur === '')            dur = default_note;
+    else if(dur === 'e')      dur = 12;
+    else if(dur === 's')      dur = 6;
+    else                      dur = 24 * +dur;
+    if(triplet === 't')       dur = 2 * dur / 3;
+    else if(triplet === '.')  dur = 3 * dur / 2;
+    if(octave === '')         octave = 1;
+    note = harmony.note2pitch[note];
+    if(note !== null) note = +note + 48 + 12 * octave;
+    return {note:note, duration:dur, changed:false};
+  }).map(harmony.counttime())
+    .filter(x => x.note !== null);
 
-      init();
-    });
+  init();
 }
 
 const selector = document.getElementById('song_selector');
