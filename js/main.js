@@ -234,8 +234,8 @@ const twoline_text_button = function(base, line1, line2, px, py, w, h, id=null) 
   }, id)
 }
 
-window.grammar_reharmonization = function() {
-  progression = harmony.reharmonize(original_progression);
+window.grammar_reharmonization = function(use_chord2vec=false) {
+  progression = harmony.reharmonize(original_progression, use_chord2vec);
   draw_chords();
 }
 
@@ -527,7 +527,7 @@ const draw_buttons = function(play, pause, stop) {
     .on('click', function() { window.hidden_markov_reharmonization() });
   dy += 75
   twoline_text_button(edit_pane, 'Grammar +', 'Chord2Vec', 0, dy, 105, 65, 'grchord2vec')
-    .on('click', function() { window.chord2vec_reharmonization() });
+    .on('click', function() { window.grammar_reharmonization(true) });
   twoline_text_button(edit_pane, 'Grammar +', 'Markov', 115, dy, 105, 65, 'grmarkov')
     .on('click', function() { window.markov_reharmonization(true) });
   twoline_text_button(edit_pane, 'Grammar +', 'Hidden Markov', 230, dy, 135, 65, 'grhmarkov')

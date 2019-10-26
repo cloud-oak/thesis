@@ -76,11 +76,10 @@ const wfc = function(T, P) {
     const probabilities = states[collapse_t][collapse_p].map((e, i) => e ? probs[i] / total_entropy : 0);
     let rand = Math.random();
     let idx = 0;
-    while(rand > 0 && idx < N) {
-      rand -= probabilities[idx];
+    while(rand > probabilities[idx] && idx < N) {
+      rand -= probabilities[idx++];
       idx++;
     }
-    idx--;
     
     for(let i = 0; i < N; i++) {
       states[collapse_t][collapse_p][i] = (i == idx ? 1 : 0);
