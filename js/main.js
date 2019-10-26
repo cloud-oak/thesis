@@ -537,7 +537,7 @@ const draw_buttons = function(play, pause, stop) {
       const songs = ['autumn_leaves', 'body_and_soul', 'giant_steps', 'let_it_be',
         'my_foolish_heart', 'my_way', 'what_a_wonderful_world'];
 
-      const runs_each = 20;
+      const runs_each = 50;
       const methods = [
         ['Grammar', () => window.grammar_reharmonization()],
         ['Markov', () => window.markov_reharmonization()],
