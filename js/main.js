@@ -18,6 +18,19 @@ var audio_loaded = false,
     gan_loaded = false,
     hidden_loaded = false;
 
+function download(filename, text) {
+  var element = document.createElement('a');
+  element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+  element.setAttribute('download', filename);
+
+  element.style.display = 'none';
+  document.body.appendChild(element);
+
+  element.click();
+
+  document.body.removeChild(element);
+}
+
 const tf = mm.tf; // Recycle Magenta's bundled Tensorflow
 
 const D = {bass: 35, ride: 59, hat_pedal: 44}
@@ -519,19 +532,33 @@ const draw_buttons = function(play, pause, stop) {
     .style('font-family', 'Patrick Hand')
     .style('font-size', '18pt');
   dy += 35
-  text_button(edit_pane, 'Grammar', 0, dy, 105, 65)
-    .on('click', function() { window.grammar_reharmonization() });
-  text_button(edit_pane, 'Markov', 115, dy, 105, 65)
-    .on('click', function() { window.markov_reharmonization() });
-  text_button(edit_pane, 'Hidden Markov', 230, dy, 135, 65)
-    .on('click', function() { window.hidden_markov_reharmonization() });
-  dy += 75
-  twoline_text_button(edit_pane, 'Grammar +', 'Chord2Vec', 0, dy, 105, 65, 'grchord2vec')
-    .on('click', function() { window.grammar_reharmonization(true) });
-  twoline_text_button(edit_pane, 'Grammar +', 'Markov', 115, dy, 105, 65, 'grmarkov')
-    .on('click', function() { window.markov_reharmonization(true) });
-  twoline_text_button(edit_pane, 'Grammar +', 'Hidden Markov', 230, dy, 135, 65, 'grhmarkov')
-    .on('click', function() { window.hidden_markov_reharmonization(true) });
+  text_button(edit_pane, 'Benchmark Reharmonizations', 0, dy, 365, 65)
+    .on('click', function() {
+      const runs_each = 1;
+      const methods = [
+        ['Grammar', () => window.grammar_reharmonization()],
+        ['Markov', () => window.markov_reharmonization()],
+        ['Hidden Markov', () => window.hidden_markov_reharmonization()],
+        ['Chord2Vec', () => window.grammar_reharmonization(true)],
+        ['Markov+Grammar', () => window.markov_reharmonization(true)],
+        ['Hidden Markov+Grammar', () => window.hidden_markov_reharmonization(true)]
+      ];
+
+      let runs = [];
+
+      for(let [methodname, method] of methods) {
+        for(let i = 0; i < runs_each; i++) {
+          method();
+          runs.push([[
+            methodname,
+            original_progression,
+            progression
+          ]])
+        }
+      }
+
+      download('reharmonization_runs.json', JSON.stringify(runs));
+    });
   dy += 75;
   edit_pane.append('text')
     .text('— Improvisation —')
