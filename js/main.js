@@ -904,7 +904,7 @@ tf.loadLayersModel('nets/gan_quantized/model.json').then(net => {
   d3.select('#improvise_gan > text')
     .style('fill', 'black');
   console.log('finished loading gan');
-  window.improvise_gan = function() {
+  window.improvise_gan = async function() {
     console.log('Improvising using gan');
     const LATENT = 128;
     let noise = tf.randomNormal([1, LATENT]);
