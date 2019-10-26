@@ -438,13 +438,13 @@ const markov_reharmonize = function(progression, melody, hidden_markov=false, us
   const modes = {"": 0, "7": 1, "maj7": 2, "m": 3, "m7": 4, "o": 5, "o7": 6};
   if(hidden_markov) {
     const last_note = melody[melody.length-1];
-    const end  = 8 * Math.ceil((last_note.start + last_note.duration) / 2);
+    const end  = 8 * Math.ceil((last_note.start + last_note.duration) / 48);
     let melodies = tf.buffer([end, 12]);
     for(let note of melody) {
-      const notestart = Math.round(4 * note.start);
-      const noteend   = Math.round(4 * (note.start+note.duration));
+      const notestart = Math.round(note.start / 6);
+      const noteend   = Math.round((note.start+note.duration) / 6);
       for(let t = notestart; t < noteend; t++) {
-        melodies.set(1, t, note.pitch%12);
+        melodies.set(1, t, note.note%12);
       }
     }
     melodies = melodies.toTensor().reshape([-1, 8, 12]);
