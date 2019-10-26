@@ -452,8 +452,8 @@ const markov_reharmonize = function(progression, melody, hidden_markov=false, us
     conditional_prob = (replacement, base) => {
       if(replacement.mode === "+" || replacement.mode === "ø") // These are not in the model..
         return 0;
-      const tensor_start = Math.floor(base.start / 2);
-      const tensor_end   = Math.min(Math.ceil((base.start+base.duration) / 2), chord_probs.length);
+      const tensor_start = Math.floor(base.start / 48);
+      const tensor_end   = Math.min(Math.ceil((base.start+base.duration) / 48), chord_probs.length);
       let logsum = 0;
       let logcount = 0;
       for(let t = tensor_start; t < tensor_end; t++) {
