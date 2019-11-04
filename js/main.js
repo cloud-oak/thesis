@@ -379,8 +379,7 @@ window.locked_hands_voicing = function() {
   console.log(voicing);
 }
 
-window.shortest_path_wfc_voicing = function() {
-  shortest_path_voicing();
+window.wfc_voicing = function() {
   const constraints = voicing;
   voicing = [];
   let v_idx = 0;
@@ -554,15 +553,17 @@ const draw_buttons = function(play, pause, stop) {
     .style('font-family', 'Patrick Hand')
     .style('font-size', '18pt');
   dy += 35
-  text_button(edit_pane, 'Naïve Voicing', 0, dy, 130, 65, 'naive_voicing')
+  text_button(edit_pane, 'Naive', 0, dy, 80, 65, 'naive_voicing')
     .on('click', function() { window.naive_voicing(); draw_voicing(); });
-  text_button(edit_pane, 'Locked Hands', 140, dy, 365-140, 65, 'locked_hands')
+  text_button(edit_pane, 'Locked Hands', 90, dy, 130, 65, 'locked_hands')
     .on('click', function() { window.locked_hands_voicing(); draw_voicing(); });
-  dy += 75;
-  text_button(edit_pane, 'Shortest Path', 0, dy, 130, 65, 'shortest_path')
+  text_button(edit_pane, 'Shortest Path', 230, dy, 135, 65, 'shortest_path')
     .on('click', function() { window.shortest_path_voicing(); draw_voicing(); });
-  twoline_text_button(edit_pane, 'Shortest Path +', 'Wave Function Collapse', 140, dy, 365-140, 65, 'wfc')
-    .on('click', function() { window.shortest_path_wfc_voicing(); draw_voicing(); });
+  dy += 75;
+  twoline_text_button(edit_pane, 'Naive +', 'WFC', 0, dy, 178, 65, 'naive_wfc')
+    .on('click', function() { window.naive_voicing(); window.wfc_voicing(); draw_voicing(); });
+  twoline_text_button(edit_pane, 'Shortest Path +', 'WFC', 188, dy, 178, 65, 'shortest_path_wfc')
+    .on('click', function() { window.shortest_path_voicing(); window.wfc_voicing(); draw_voicing(); });
   dy += 75;
   edit_pane_height = dy;
 }
